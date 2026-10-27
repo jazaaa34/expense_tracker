@@ -1,13 +1,14 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { ArrowRight, Shield, Zap, Sparkles, UserCheck } from 'lucide-react';
 
 export default function IntroPage({ onNavigateLogin, onNavigateSignup }) {
   const { savedSession, login } = useAuth();
 
-  const handleQuickResume = async () => {
+  const handleLaunchDashboard = async () => {
     if (savedSession) {
       await login(savedSession.email, savedSession.password || 'password123', true);
+    } else {
+      onNavigateSignup();
     }
   };
 
@@ -18,6 +19,7 @@ export default function IntroPage({ onNavigateLogin, onNavigateSignup }) {
       display: 'flex',
       flexDirection: 'column'
     }}>
+      {/* Upper Navigation Bar */}
       <header style={{
         padding: '24px 32px',
         display: 'flex',
@@ -27,6 +29,7 @@ export default function IntroPage({ onNavigateLogin, onNavigateSignup }) {
         width: '100%',
         margin: '0 auto'
       }}>
+        {/* WalletWeather in upper part */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
             width: '42px',
@@ -43,25 +46,29 @@ export default function IntroPage({ onNavigateLogin, onNavigateSignup }) {
               <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" />
             </svg>
           </div>
-          <div>
-            <div style={{ fontSize: '1.125rem', fontWeight: 900, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
-              WalletWeather
-            </div>
-            <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Predicts, Pauses & Personalises
-            </div>
-          </div>
+          <span style={{
+            fontSize: '1.25rem',
+            fontWeight: 900,
+            letterSpacing: '-0.02em',
+            color: 'var(--text-primary)'
+          }}>
+            WalletWeather
+          </span>
         </div>
 
-        <div style={{ display: 'flex', gap: '12px' }}>
+        {/* Sign In & Get Started */}
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <button
             onClick={onNavigateLogin}
             style={{
               padding: '10px 20px',
               borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-light)',
+              backgroundColor: 'var(--surface-card)',
               color: 'var(--text-primary)',
               fontWeight: 700,
-              fontSize: '0.875rem'
+              fontSize: '0.875rem',
+              cursor: 'pointer'
             }}
           >
             Sign In
@@ -72,9 +79,11 @@ export default function IntroPage({ onNavigateLogin, onNavigateSignup }) {
               padding: '10px 22px',
               borderRadius: 'var(--radius-md)',
               backgroundColor: 'var(--primary)',
+              border: 'none',
               color: '#FFFFFF',
               fontWeight: 800,
               fontSize: '0.875rem',
+              cursor: 'pointer',
               boxShadow: 'var(--shadow-sm)'
             }}
           >
@@ -83,137 +92,72 @@ export default function IntroPage({ onNavigateLogin, onNavigateSignup }) {
         </div>
       </header>
 
-      <div style={{
+      {/* Hero Section */}
+      <main style={{
         flex: 1,
         maxWidth: '1200px',
         width: '100%',
         margin: '0 auto',
-        padding: '32px 32px 64px',
+        padding: '48px 32px 80px',
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-        gap: '48px',
+        gap: '56px',
         alignItems: 'center'
       }}>
+        {/* Left: Heading and Actions */}
         <div>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '6px 14px',
-            borderRadius: 'var(--radius-full)',
-            backgroundColor: 'var(--surface-muted)',
-            border: '1px solid var(--border-light)',
-            fontSize: '0.8125rem',
-            fontWeight: 800,
-            color: 'var(--accent-honey)',
-            marginBottom: '20px'
-          }}>
-            <Sparkles size={14} />
-            <span>Next-Gen Behavioral Expense Tracking</span>
-          </div>
-
           <h1 style={{
-            fontSize: '3rem',
+            fontSize: 'clamp(2.4rem, 4vw, 3.25rem)',
             fontWeight: 900,
             lineHeight: 1.15,
-            letterSpacing: '-0.04em',
+            letterSpacing: '-0.03em',
             color: 'var(--text-primary)',
-            marginBottom: '20px'
+            marginBottom: '32px'
           }}>
             Smart Money Tracking That <span style={{ color: 'var(--accent-honey)' }}>Predicts</span> & <span style={{ color: 'var(--expense-red)' }}>Alerts</span>
           </h1>
 
-          <p style={{
-            fontSize: '1.125rem',
-            lineHeight: 1.6,
-            color: 'var(--text-secondary)',
-            marginBottom: '32px',
-            maxWidth: '520px'
-          }}>
-            Stop tracking in the rearview mirror. WalletWeather analyzes peak spending days, detects double charges, and coaches you with integrated Groq AI intelligence.
-          </p>
-
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
-            {savedSession ? (
-              <button
-                onClick={handleQuickResume}
-                style={{
-                  height: '52px',
-                  padding: '0 26px',
-                  borderRadius: '16px',
-                  backgroundColor: 'var(--income-green)',
-                  color: '#FFFFFF',
-                  fontWeight: 800,
-                  fontSize: '1rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  boxShadow: 'var(--shadow-md)'
-                }}
-              >
-                <UserCheck size={20} />
-                <span>Continue as {savedSession.name || 'Aysha'}</span>
-                <ArrowRight size={18} />
-              </button>
-            ) : (
-              <button
-                onClick={onNavigateSignup}
-                style={{
-                  height: '52px',
-                  padding: '0 26px',
-                  borderRadius: '16px',
-                  backgroundColor: 'var(--primary)',
-                  color: '#FFFFFF',
-                  fontWeight: 800,
-                  fontSize: '1rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  boxShadow: 'var(--shadow-hero)'
-                }}
-              >
-                <span>Launch Your Dashboard</span>
-                <ArrowRight size={18} />
-              </button>
-            )}
+            <button
+              onClick={handleLaunchDashboard}
+              style={{
+                height: '52px',
+                padding: '0 28px',
+                borderRadius: '16px',
+                backgroundColor: 'var(--primary)',
+                border: 'none',
+                color: '#FFFFFF',
+                fontWeight: 800,
+                fontSize: '1rem',
+                cursor: 'pointer',
+                boxShadow: 'var(--shadow-hero)'
+              }}
+            >
+              Launch Your Dashboard
+            </button>
 
             <button
               onClick={onNavigateLogin}
               style={{
                 height: '52px',
-                padding: '0 22px',
+                padding: '0 24px',
                 borderRadius: '16px',
                 backgroundColor: 'var(--surface-card)',
                 border: '1.2px solid var(--border-light)',
                 color: 'var(--text-primary)',
                 fontWeight: 800,
-                fontSize: '0.9375rem'
+                fontSize: '0.9375rem',
+                cursor: 'pointer'
               }}
             >
-              Sign In with Account
+              Sign In
             </button>
-          </div>
-
-          <div style={{ display: 'flex', gap: '24px', marginTop: '48px' }}>
-            <div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--expense-red)' }}>Peak Day</div>
-              <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Expense Analysis</div>
-            </div>
-            <div style={{ width: '1px', height: '40px', backgroundColor: 'var(--border-light)' }} />
-            <div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--primary)' }}>24/7</div>
-              <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Money Guard Alerts</div>
-            </div>
-            <div style={{ width: '1px', height: '40px', backgroundColor: 'var(--border-light)' }} />
-            <div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--accent-honey)' }}>GPT-OSS</div>
-              <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Groq AI Advisor</div>
-            </div>
           </div>
         </div>
 
-        <div style={{ position: 'relative' }}>
-          <div className="card" style={{
+        {/* Right: That Photo */}
+        <div>
+          <div style={{
             overflow: 'hidden',
             borderRadius: '28px',
             boxShadow: 'var(--shadow-hero)',
@@ -223,31 +167,10 @@ export default function IntroPage({ onNavigateLogin, onNavigateSignup }) {
               src="/tracking_hero.jpg" 
               alt="WalletWeather tracking hero" 
               style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'cover' }}
-              onError={(e) => { e.target.style.display = 'none'; }}
             />
-            <div style={{
-              padding: '24px',
-              backgroundColor: '#FFFFFF',
-              borderTop: '1px solid var(--border-light)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--income-green)', textTransform: 'uppercase' }}>
-                  Live MoneyGuard Protection
-                </span>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-                  Active Shield
-                </span>
-              </div>
-              <div style={{ fontSize: '1.125rem', fontWeight: 900, color: 'var(--text-primary)' }}>
-                "Duplicate Charge & Subscription Surge Detected"
-              </div>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                Automated algorithms safeguard your wallet from silent price hikes and rogue subscriptions.
-              </p>
-            </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

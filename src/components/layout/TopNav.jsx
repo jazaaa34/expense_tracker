@@ -1,44 +1,14 @@
 
-import React, { useState, useEffect } from 'react';
-import { Search, Plus, Bell, LogOut, Cpu, Camera } from 'lucide-react';
+import React from 'react';
+import { Search, Plus, Bell, LogOut, Camera } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
 import { useAuth } from '../../context/AuthContext';
-import { formatINR, getGreeting } from '../../services/storageService';
-import { aiService } from '../../services/aiService';
+import { getGreeting } from '../../services/storageService';
 
-export default function TopNav({ currentTab, onOpenAddTxn, onOpenScanBill, onOpenApiKeyModal, searchQuery, onSearchChange, onSelectTab }) {
+export default function TopNav({ currentTab, onOpenAddTxn, onOpenScanBill, searchQuery, onSearchChange, onSelectTab }) {
   const { user, alerts } = useWallet();
   const { requestLogout } = useAuth();
-  const [currentModel, setCurrentModel] = useState(aiService.getModel());
-  const [isAiOnline, setIsAiOnline] = useState(true);
-
-  useEffect(() => {
-    let isMounted = true;
-    const checkStatus = async () => {
-      const st = await aiService.getServerStatus();
-      if (isMounted) {
-        setIsAiOnline(Boolean(st.configured));
-        setCurrentModel(aiService.getModel());
-      }
-    };
-    checkStatus();
-
-    const handleUpdate = () => checkStatus();
-    window.addEventListener('storage', handleUpdate);
-    window.addEventListener('walletweather_model_updated', handleUpdate);
-    return () => {
-      isMounted = false;
-      window.removeEventListener('storage', handleUpdate);
-      window.removeEventListener('walletweather_model_updated', handleUpdate);
-    };
-  }, []);
-
   const unreadAlerts = alerts.filter(a => !a.isResolved);
-
-  const displayModelName = currentModel.includes('120b') ? 'GPT-OSS 120B' 
-    : currentModel.includes('20b') ? 'GPT-OSS 20B'
-    : currentModel.includes('qwen') ? 'Qwen 3.8'
-    : currentModel.split('/')[1] || currentModel;
 
   return (
     <header style={{
@@ -93,39 +63,6 @@ export default function TopNav({ currentTab, onOpenAddTxn, onOpenScanBill, onOpe
 
       {/* Right: Actions & Indicators */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        {/* Active AI Model Button */}
-        <button
-          onClick={onOpenApiKeyModal}
-          style={{
-            padding: '7px 12px',
-            borderRadius: '10px',
-            backgroundColor: '#FFFFFF',
-            border: '1.2px solid var(--border-light)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '7px',
-            fontSize: '0.8125rem',
-            fontWeight: 800,
-            color: 'var(--text-primary)',
-            cursor: 'pointer',
-            boxShadow: 'var(--shadow-xs)',
-            transition: 'all 0.15s ease'
-          }}
-          title={`Active AI Model: ${displayModelName} (Click to change model)`}
-          onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--primary)'}
-          onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border-light)'}
-        >
-          <span style={{
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            backgroundColor: isAiOnline ? 'var(--income-green)' : 'var(--accent-honey)',
-            display: 'inline-block'
-          }} />
-          <Cpu size={14} color="var(--primary)" />
-          <span className="hidden-tablet">{displayModelName}</span>
-        </button>
-
         {/* Alerts Button */}
         <button
           onClick={() => onSelectTab('alerts')}

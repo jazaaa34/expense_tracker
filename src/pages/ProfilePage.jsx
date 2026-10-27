@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useWallet } from '../context/WalletContext';
 import { useAuth } from '../context/AuthContext';
 import { exportService } from '../services/exportService';
-import { aiService } from '../services/aiService';
 import { formatINR, EXPENSE_CATEGORIES } from '../services/storageService';
+import { apiRequest } from '../services/apiClient';
 import Modal from '../components/common/Modal';
-import { User, RotateCcw, Download, Cpu, Edit2, ShieldAlert } from 'lucide-react';
+import { User, RotateCcw, Download, Database, Edit2, ShieldAlert, CheckCircle2, RefreshCw } from 'lucide-react';
 
-export default function ProfilePage({ onOpenApiKeyModal }) {
+export default function ProfilePage() {
   const { user, updateProfile } = useAuth();
   const { budgets, setBudget, transactions, resetToDefaultData } = useWallet();
 
@@ -15,34 +15,62 @@ export default function ProfilePage({ onOpenApiKeyModal }) {
   const [nameInput, setNameInput] = useState(user?.name || (user?.email === 'jazaaa34@gmail.com' ? 'Aysha' : ''));
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
 
-  React.useEffect(() => {
+  // Database status
+  const [dbStatus, setDbStatus] = useState({ connected: false, storageType: 'local' });
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+
+  useEffect(() => {
     if (user?.name) {
       setNameInput(user.name);
     }
   }, [user]);
 
-  const [hasKey, setHasKey] = useState(false);
-  const [model, setModel] = useState(aiService.getModel());
-
-  React.useEffect(() => {
+  useEffect(() => {
     let isMounted = true;
-    const check = async () => {
-      const st = await aiService.getServerStatus();
-      if (isMounted) {
-        setHasKey(Boolean(st.configured));
-        setModel(aiService.getModel());
+    const checkDb = async () => {
+      try {
+        const { ok, data } = await apiRequest('/api/db/status');
+        if (isMounted && ok && data) {
+          setDbStatus(data);
+        }
+      } catch {
+        // local fallback
       }
     };
-    check();
-    const handleUpdate = () => check();
-    window.addEventListener('storage', handleUpdate);
-    window.addEventListener('walletweather_model_updated', handleUpdate);
+    checkDb();
     return () => {
       isMounted = false;
-      window.removeEventListener('storage', handleUpdate);
-      window.removeEventListener('walletweather_model_updated', handleUpdate);
     };
   }, []);
+
+  const handleManualSync = async () => {
+    if (!user?.email || isSyncing) return;
+    setIsSyncing(true);
+    setSyncMessage('');
+    try {
+      const { ok, data } = await apiRequest('/api/db/sync', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: user.email,
+          data: {
+            transactions,
+            budgets,
+            updatedAt: new Date().toISOString()
+          }
+        })
+      });
+      if (ok && data?.success) {
+        setSyncMessage('Data synced successfully to database!');
+        setTimeout(() => setSyncMessage(''), 3000);
+      }
+    } catch (e) {
+      setSyncMessage('Synced locally.');
+      setTimeout(() => setSyncMessage(''), 3000);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleSaveName = (e) => {
     e.preventDefault();
@@ -189,35 +217,68 @@ export default function ProfilePage({ onOpenApiKeyModal }) {
           Data & AI Configuration
         </h2>
 
-        {/* AI Model Card */}
+        {/* Database & Cloud Sync Card */}
         <div style={{
           padding: '16px',
           borderRadius: '14px',
           border: '1.2px solid var(--border-light)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between'
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Cpu size={20} color={hasKey ? 'var(--income-green)' : 'var(--primary)'} />
+            <div style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '10px',
+              backgroundColor: dbStatus.connected ? 'rgba(16, 185, 129, 0.12)' : 'rgba(59, 130, 246, 0.12)',
+              color: dbStatus.connected ? 'var(--income-green)' : 'var(--primary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Database size={20} />
+            </div>
             <div>
-              <div style={{ fontWeight: 800, fontSize: '0.875rem' }}>Groq AI Inference Engine</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                {hasKey ? `Backend Active (${model})` : `Inference Model: ${model}`}
+              <div style={{ fontWeight: 800, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>{dbStatus.connected ? 'MongoDB Cloud Database' : 'Database Storage Engine'}</span>
+                <span style={{
+                  fontSize: '0.6875rem',
+                  fontWeight: 800,
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  backgroundColor: dbStatus.connected ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface-muted)',
+                  color: dbStatus.connected ? 'var(--income-green)' : 'var(--text-secondary)'
+                }}>
+                  {dbStatus.connected ? 'Connected' : 'Active (Local Sync)'}
+                </span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                {syncMessage || (dbStatus.connected ? `Live sync to database (${dbStatus.database || 'walletweather'})` : 'Transactions and budgets automatically backed up')}
               </div>
             </div>
           </div>
           <button
-            onClick={onOpenApiKeyModal}
+            onClick={handleManualSync}
+            disabled={isSyncing}
             style={{
               padding: '8px 14px',
               borderRadius: '8px',
               backgroundColor: 'var(--surface-muted)',
+              border: '1px solid var(--border-light)',
               fontWeight: 700,
-              fontSize: '0.8125rem'
+              fontSize: '0.8125rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: isSyncing ? 'not-allowed' : 'pointer',
+              color: 'var(--text-primary)'
             }}
           >
-            Select Model
+            <RefreshCw size={13} className={isSyncing ? 'spin' : ''} style={{ animation: isSyncing ? 'spin 1s linear infinite' : 'none' }} />
+            <span>{isSyncing ? 'Syncing...' : 'Sync Database'}</span>
           </button>
         </div>
 

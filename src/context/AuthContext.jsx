@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { storageService, STORAGE_KEYS } from '../services/storageService';
+import { apiRequest } from '../services/apiClient';
 
 const AuthContext = createContext();
 
@@ -22,7 +23,7 @@ export function AuthProvider({ children }) {
   const login = async (email, password, rememberMe = true) => {
     const cleanEmail = email.trim().toLowerCase();
     const users = storageService.get(STORAGE_KEYS.REGISTERED_USERS, {});
-    const match = users[cleanEmail];
+    let match = users[cleanEmail];
 
     if (match && match.password === password) {
       const isAysha = cleanEmail === 'jazaaa34@gmail.com' || cleanEmail === 'aysha@example.com';
@@ -48,7 +49,7 @@ export function AuthProvider({ children }) {
       return { success: true };
     }
 
-    return { success: false, message: 'Invalid email or password. Hint: jazaaa34@gmail.com / password123' };
+    return { success: false, message: 'Invalid email or password.' };
   };
 
   const signUp = async (name, email, password, rememberMe = true) => {
@@ -62,6 +63,16 @@ export function AuthProvider({ children }) {
 
     users[cleanEmail] = { name: cleanName, password };
     storageService.set(STORAGE_KEYS.REGISTERED_USERS, users);
+
+    // Also persist user account to MongoDB backend
+    try {
+      await apiRequest('/api/db/user/save', {
+        method: 'POST',
+        body: JSON.stringify({ email: cleanEmail, name: cleanName, password })
+      });
+    } catch (e) {
+      console.warn('Backend user sync notice:', e.message);
+    }
 
     const userData = { email: cleanEmail, name: cleanName, rememberMe };
     setUser(userData);

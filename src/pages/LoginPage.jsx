@@ -4,8 +4,8 @@ import { ArrowLeft, Lock, Mail } from 'lucide-react';
 
 export default function LoginPage({ onNavigateIntro, onNavigateSignup }) {
   const { login } = useAuth();
-  const [email, setEmail] = useState('jazaaa34@gmail.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -20,11 +20,6 @@ export default function LoginPage({ onNavigateIntro, onNavigateSignup }) {
       setError(res.message || 'Login failed.');
       setIsLoading(false);
     }
-  };
-
-  const handleFillDemo = () => {
-    setEmail('jazaaa34@gmail.com');
-    setPassword('password123');
   };
 
   return (
@@ -77,39 +72,6 @@ export default function LoginPage({ onNavigateIntro, onNavigateSignup }) {
             </p>
           </div>
 
-          <div style={{
-            padding: '12px 16px',
-            borderRadius: '12px',
-            backgroundColor: 'var(--surface-muted)',
-            border: '1px solid var(--border-light)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '20px'
-          }}>
-            <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--accent-honey)' }}>
-                Saved Demo Account (Aysha):
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                jazaaa34@gmail.com / password123
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleFillDemo}
-              style={{
-                fontSize: '0.75rem',
-                fontWeight: 800,
-                color: 'var(--primary)',
-                textDecoration: 'underline',
-                cursor: 'pointer'
-              }}
-            >
-              Fill Aysha
-            </button>
-          </div>
-
           {error && (
             <div style={{
               padding: '12px',
@@ -135,7 +97,7 @@ export default function LoginPage({ onNavigateIntro, onNavigateSignup }) {
                 <input
                   type="email"
                   required
-                  placeholder="aysha@example.com"
+                  placeholder="name@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   style={{

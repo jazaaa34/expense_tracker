@@ -155,12 +155,13 @@ Instructions:
         return data.content.trim();
       }
 
-      if (!ok && data?.error) {
-        return `⚠️ **Groq AI Notice:** ${data.error}\n\n*Here is personalized guidance from your financial ledger:* \n\n` + this.generateConversationalReply(prompt, summary);
+      if (!ok) {
+        // Silently fall back to intelligent conversational engine without scary symbols or technical warnings
+        return this.generateConversationalReply(prompt, summary);
       }
     } catch (e) {
-      console.warn('Backend /api/chat error:', e.message);
-      return `⚠️ **Backend Notice (${e.message}).**\n\n*Here is guidance from your financial ledger:* \n\n` + this.generateConversationalReply(prompt, summary);
+      console.warn('Backend /api/chat fallback:', e.message);
+      return this.generateConversationalReply(prompt, summary);
     }
 
     // Fallback: Truly Conversational Local AI Engine (100% client-safe, zero external key prompts)

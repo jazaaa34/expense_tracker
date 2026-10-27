@@ -10,6 +10,7 @@ import {
   formatINR
 } from '../services/storageService';
 import { useAuth } from './AuthContext';
+import { apiRequest } from '../services/apiClient';
 
 const WalletContext = createContext();
 
@@ -67,38 +68,79 @@ export function WalletProvider({ children }) {
     setAiQuestions(Array.isArray(aiQ) ? aiQ : []);
     setUtilityCaps(uCaps || {});
     setIsLoaded(true);
+
+    // Asynchronously pull latest from database if user is authenticated
+    if (user?.email) {
+      apiRequest('/api/db/sync', {
+        method: 'POST',
+        body: JSON.stringify({ email: user.email })
+      }).then(({ ok, data }) => {
+        if (ok && data?.data && data.data.transactions && Array.isArray(data.data.transactions) && data.data.transactions.length > 0) {
+          const cloudTxns = [...data.data.transactions];
+          cloudTxns.sort((a, b) => new Date(b.date) - new Date(a.date));
+          setTransactions(cloudTxns);
+          storageService.setUserData(email, 'transactions', cloudTxns);
+          if (data.data.budgets) {
+            setBudgets(data.data.budgets);
+            storageService.setUserData(email, 'budgets', data.data.budgets);
+          }
+        }
+      }).catch(() => {
+        // Local fallback is already active
+      });
+    }
   }, [user?.email]);
 
-  // Sync to local storage for the current user
+  // Push updates to MongoDB in background
+  const pushToDb = (dataToSync) => {
+    if (!user?.email) return;
+    const email = user.email.toLowerCase().trim();
+    apiRequest('/api/db/sync', {
+      method: 'POST',
+      body: JSON.stringify({
+        email,
+        data: dataToSync
+      })
+    }).catch(() => {
+      // Offline or local mode
+    });
+  };
+
+  // Sync to local storage and MongoDB for the current user
   const syncTransactions = (newTxns) => {
     const email = user?.email?.toLowerCase().trim() || 'guest';
     newTxns.sort((a, b) => new Date(b.date) - new Date(a.date));
     setTransactions(newTxns);
     storageService.setUserData(email, 'transactions', newTxns);
+    pushToDb({ transactions: newTxns, budgets, goals, alerts, utilityCaps, savedAmount });
   };
 
   const syncBudgets = (newBudgets) => {
     const email = user?.email?.toLowerCase().trim() || 'guest';
     setBudgets(newBudgets);
     storageService.setUserData(email, 'budgets', newBudgets);
+    pushToDb({ transactions, budgets: newBudgets, goals, alerts, utilityCaps, savedAmount });
   };
 
   const syncAlerts = (newAlerts) => {
     const email = user?.email?.toLowerCase().trim() || 'guest';
     setAlerts(newAlerts);
     storageService.setUserData(email, 'alerts', newAlerts);
+    pushToDb({ transactions, budgets, goals, alerts: newAlerts, utilityCaps, savedAmount });
   };
 
   const syncGoals = (newGoals) => {
     const email = user?.email?.toLowerCase().trim() || 'guest';
     setGoals(newGoals);
     storageService.setUserData(email, 'goals', newGoals);
+    pushToDb({ transactions, budgets, goals: newGoals, alerts, utilityCaps, savedAmount });
   };
 
   const syncSavedAmount = (amt) => {
     const email = user?.email?.toLowerCase().trim() || 'guest';
     setSavedAmount(amt);
     storageService.setUserData(email, 'saved_amount', amt);
+    pushToDb({ transactions, budgets, goals, alerts, utilityCaps, savedAmount: amt });
   };
 
   const syncAiQuestions = (questions) => {

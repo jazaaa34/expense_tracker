@@ -116,16 +116,20 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
   };
 
   // Step 2: Verify OTP and finalize signup
-  const handleVerifyOtp = async (e) => {
-    if (e) e.preventDefault();
-    const cleanOtp = otp.trim();
+  const handleVerifyOtp = async (e, directOtp) => {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    const candidate = typeof directOtp === 'string' ? directOtp : otp;
+    const cleanOtp = candidate.replace(/\D/g, '').trim();
+
     if (cleanOtp.length !== 6) {
       setError('Please enter all 6 digits of the verification code.');
       return;
     }
 
+    if (isVerifying) return;
+
     setError('');
-    setInfoMessage('');
+    setInfoMessage('Verifying your code...');
     setIsVerifying(true);
 
     try {
@@ -138,8 +142,10 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
       });
 
       if (!ok || !data?.success) {
-        throw new Error(data?.error || 'Verification failed.');
+        throw new Error(data?.error || 'Verification failed. Please check the code and try again.');
       }
+
+      setInfoMessage('Code verified! Setting up your secure account...');
 
       // OTP verified! Create user account in AuthContext
       const signRes = await signUp(name, email, password, rememberMe);
@@ -149,7 +155,8 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
       }
       // On success, AuthContext sets current user and App automatically redirects
     } catch (err) {
-      setError(err.message || 'Incorrect verification code.');
+      setError(err.message || 'Incorrect verification code. Please try again.');
+      setInfoMessage('');
       setIsVerifying(false);
     }
   };
@@ -462,6 +469,9 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
                       const val = e.target.value.replace(/\D/g, '').slice(0, 6);
                       setOtp(val);
                       if (error) setError('');
+                      if (val.length === 6 && !isVerifying) {
+                        handleVerifyOtp(null, val);
+                      }
                     }}
                     style={{
                       width: '100%',
@@ -491,7 +501,7 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
               {/* Verify & Create Account Button */}
               <button
                 type="submit"
-                disabled={isVerifying || otp.length !== 6}
+                disabled={isVerifying}
                 style={{
                   height: '48px',
                   borderRadius: 'var(--radius-md)',
@@ -504,8 +514,10 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '8px',
-                  cursor: (isVerifying || otp.length !== 6) ? 'not-allowed' : 'pointer',
-                  opacity: (isVerifying || otp.length !== 6) ? 0.7 : 1
+                  cursor: isVerifying ? 'not-allowed' : 'pointer',
+                  opacity: isVerifying ? 0.7 : 1,
+                  border: 'none',
+                  transition: 'background-color 0.2s ease'
                 }}
               >
                 {isVerifying ? (

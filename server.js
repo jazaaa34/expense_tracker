@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { handleGroqApi, DEFAULT_GROQ_MODEL } from './api/groqHandler.js';
 import { handleOtpApi } from './api/otpHandler.js';
 import { handleBillExtractApi } from './api/billExtractHandler.js';
+import { handleDataApi } from './api/dataHandler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,6 +67,10 @@ const server = http.createServer((req, res) => {
     const senderEmail = process.env.BREVO_SENDER_EMAIL || 'jazaaa34@gmail.com';
     const senderName = process.env.BREVO_SENDER_NAME || 'WalletWeather';
     return handleOtpApi(req, res, brevoKey, senderEmail, senderName);
+  }
+
+  if (url.pathname.startsWith('/api/db/')) {
+    return handleDataApi(req, res);
   }
 
   if (url.pathname.startsWith('/api/')) {

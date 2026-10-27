@@ -14,7 +14,6 @@ import ProfilePage from './pages/ProfilePage';
 import BillsPage from './pages/BillsPage';
 import TransactionModal from './components/transactions/TransactionModal';
 import TransactionDetailSheet from './components/transactions/TransactionDetailSheet';
-import GroqKeyModal from './components/settings/GroqKeyModal';
 import ExitConfirmModal from './components/common/ExitConfirmModal';
 import BillUploadModal from './components/bills/BillUploadModal';
 import { formatINR } from './services/storageService';
@@ -32,7 +31,6 @@ function MainApp() {
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
   const [editingTxn, setEditingTxn] = useState(null);
   const [selectedTxn, setSelectedTxn] = useState(null);
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [isExitModalOpen, setIsExitModalOpen] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -140,7 +138,6 @@ function MainApp() {
       onSelectTab={setCurrentTab}
       onOpenAddTxn={handleOpenAddTxn}
       onOpenScanBill={() => setIsBillModalOpen(true)}
-      onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
       searchQuery={searchQuery}
       onSearchChange={(q) => {
         setSearchQuery(q);
@@ -183,11 +180,11 @@ function MainApp() {
       )}
 
       {currentTab === 'ai-chat' && (
-        <AiChatPage onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)} />
+        <AiChatPage />
       )}
 
       {currentTab === 'profile' && (
-        <ProfilePage onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)} />
+        <ProfilePage />
       )}
 
       {/* Global Modals */}
@@ -230,11 +227,6 @@ function MainApp() {
           updateTransaction(updatedTxn);
           setSelectedTxn(updatedTxn);
         }}
-      />
-
-      <GroqKeyModal
-        isOpen={isApiKeyModalOpen}
-        onClose={() => setIsApiKeyModalOpen(false)}
       />
 
       <ExitConfirmModal

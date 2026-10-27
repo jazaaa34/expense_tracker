@@ -1,30 +1,29 @@
 // ==============================================================================
 // BACKEND GROQ API HANDLER - WALLETWEATHER WEB
-// Secure server-side proxy for Groq API.
-// Never exposes GROQ_API_KEY to the browser or public client.
+// Secure server-side proxy for Groq API with AUTOMATIC MODEL FAILOVER.
+// Seamlessly rotates models upon rate-limit (429) or token limits without showing symbols or errors.
 // ==============================================================================
 
-export const SUPPORTED_GROQ_MODELS = [
-  { id: 'openai/gpt-oss-120b', name: 'OpenAI GPT-OSS 120B (Recommended)' },
-  { id: 'openai/gpt-oss-20b', name: 'OpenAI GPT-OSS 20B (Ultra Fast)' },
-  { id: 'qwen/qwen3.8-27b', name: 'Qwen 3.8 27B' }
+// Ordered list of models to try in sequence upon rate limits or errors
+export const GROQ_MODEL_CASCADE = [
+  'openai/gpt-oss-120b',
+  'openai/gpt-oss-20b',
+  'qwen/qwen3.8-27b'
 ];
 
 export const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-120b';
 
-// Outdated/retired models to explicitly filter out
+export const SUPPORTED_GROQ_MODELS = [
+  { id: 'openai/gpt-oss-120b', name: 'OpenAI GPT-OSS 120B' },
+  { id: 'openai/gpt-oss-20b', name: 'OpenAI GPT-OSS 20B' },
+  { id: 'qwen/qwen3.8-27b', name: 'Qwen 3.8 27B' }
+];
+
 export const RETIRED_MODELS = [
   'llama-3.3-70b-versatile',
   'llama-3.1-70b-versatile',
   'mixtral-8x7b-32768'
 ];
-
-export function resolveModel(requestedModel, configuredModel) {
-  if (!requestedModel || RETIRED_MODELS.includes(requestedModel)) {
-    return configuredModel || DEFAULT_GROQ_MODEL;
-  }
-  return requestedModel;
-}
 
 function sendJson(res, statusCode, data) {
   res.statusCode = statusCode;
@@ -68,6 +67,60 @@ function parseBody(req) {
   });
 }
 
+/**
+ * Executes chat completion with automatic model failover if rate limit (429) or failure occurs
+ */
+async function executeGroqWithFailover(effectiveKey, initialModel, messages, temperature = 0.7, max_tokens = 1024) {
+  // Build priority order starting with requested/default model, followed by other cascade models
+  const candidateModels = [
+    initialModel,
+    ...GROQ_MODEL_CASCADE.filter(m => m !== initialModel)
+  ];
+
+  let lastError = null;
+
+  for (const modelToTry of candidateModels) {
+    try {
+      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${effectiveKey}`
+        },
+        body: JSON.stringify({
+          model: modelToTry,
+          messages,
+          temperature,
+          max_tokens
+        })
+      });
+
+      if (groqRes.ok) {
+        const data = await groqRes.json();
+        const content = data.choices?.[0]?.message?.content || '';
+        return {
+          success: true,
+          content,
+          model: modelToTry
+        };
+      }
+
+      // If rate limited (429) or model issue, seamlessly try the next model
+      const errData = await groqRes.json().catch(() => ({}));
+      lastError = errData.error?.message || `HTTP ${groqRes.status}`;
+      console.warn(`[Groq Failover] Model ${modelToTry} returned status ${groqRes.status}. Auto-switching to next candidate...`);
+    } catch (fetchErr) {
+      lastError = fetchErr.message;
+      console.warn(`[Groq Failover] Network error on ${modelToTry}: ${fetchErr.message}. Auto-switching...`);
+    }
+  }
+
+  return {
+    success: false,
+    error: lastError || 'All models reached limits'
+  };
+}
+
 export async function handleGroqApi(req, res, apiKey, configuredModel = DEFAULT_GROQ_MODEL) {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -78,7 +131,6 @@ export async function handleGroqApi(req, res, apiKey, configuredModel = DEFAULT_
     return res.end();
   }
 
-  // Sanitize key and model with fallback to process.env
   const effectiveKey = (apiKey || process.env.GROQ_API_KEY || '').trim().replace(/^['"]|['"]$/g, '');
   const effectiveModel = (configuredModel || process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL).trim().replace(/^['"]|['"]$/g, '');
   const hasKey = Boolean(effectiveKey && (effectiveKey.startsWith('gsk_') || effectiveKey.length >= 20));
@@ -90,7 +142,7 @@ export async function handleGroqApi(req, res, apiKey, configuredModel = DEFAULT_
   const isTest = pathname === '/api/test-connection' || pathname === '/test-connection' || pathname.endsWith('/test-connection');
   const isChat = pathname === '/api/chat' || pathname === '/chat' || pathname.endsWith('/chat');
 
-  // 1. GET /api/status - Check if backend has GROQ_API_KEY configured (without exposing the secret)
+  // 1. GET /api/status
   if (req.method === 'GET' && isStatus) {
     return sendJson(res, 200, {
       success: true,
@@ -100,133 +152,81 @@ export async function handleGroqApi(req, res, apiKey, configuredModel = DEFAULT_
     });
   }
 
-  // 2. POST /api/test-connection - Test Groq API connectivity with configured key
+  // 2. POST /api/test-connection
   if (req.method === 'POST' && isTest) {
     if (!hasKey) {
       return sendJson(res, 400, {
         success: false,
-        error: 'GROQ_API_KEY is not configured on the server. Please add GROQ_API_KEY in your Vercel Project Settings (Environment Variables).',
-        code: 'API_KEY_MISSING'
+        error: 'GROQ_API_KEY is not configured on the server.'
       });
     }
 
     try {
-      const body = await parseBody(req);
-      const testModel = resolveModel(body.model, effectiveModel);
-
-      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${effectiveKey}`
-        },
-        body: JSON.stringify({
-          model: testModel,
-          messages: [{ role: 'user', content: 'ping' }],
-          max_tokens: 5
-        })
-      });
-
-      if (groqRes.ok) {
+      const result = await executeGroqWithFailover(effectiveKey, effectiveModel, [{ role: 'user', content: 'ping' }], 0.7, 5);
+      if (result.success) {
         return sendJson(res, 200, {
           success: true,
-          message: `Connected! Groq model (${testModel}) is active and ready.`,
-          model: testModel
+          message: 'Connected! Groq intelligence is active and ready.',
+          model: result.model
         });
       }
-
-      const errData = await groqRes.json().catch(() => ({}));
-      const msg = errData.error?.message || `HTTP ${groqRes.status}`;
-      return sendJson(res, groqRes.status, {
+      return sendJson(res, 500, {
         success: false,
-        error: `Groq error (${groqRes.status}): ${msg}`,
-        code: errData.error?.code || 'GROQ_ERROR'
+        error: result.error
       });
     } catch (e) {
       return sendJson(res, 502, {
         success: false,
-        error: `Failed to connect to Groq: ${e.message}`,
-        code: 'NETWORK_ERROR'
+        error: e.message
       });
     }
   }
 
-  // 3. POST /api/chat - Proxy chat completion request to Groq
+  // 3. POST /api/chat - Proxy chat with auto failover
   if (req.method === 'POST' && isChat) {
     if (!hasKey) {
       return sendJson(res, 503, {
         success: false,
-        error: 'GROQ_API_KEY is not configured on the server. Please configure GROQ_API_KEY in your Vercel Project Settings (Environment Variables) and redeploy.',
-        code: 'API_KEY_MISSING'
+        error: 'GROQ_API_KEY is not configured on the server.'
       });
     }
 
     try {
       const body = await parseBody(req);
       const messages = body.messages || [];
-      const model = resolveModel(body.model, effectiveModel);
+      const requestedModel = body.model && !RETIRED_MODELS.includes(body.model) ? body.model : effectiveModel;
       const temperature = typeof body.temperature === 'number' ? body.temperature : 0.7;
       const max_tokens = typeof body.max_tokens === 'number' ? body.max_tokens : 1024;
 
       if (!Array.isArray(messages) || messages.length === 0) {
         return sendJson(res, 400, {
           success: false,
-          error: 'Missing or invalid "messages" array in request body.',
-          code: 'INVALID_REQUEST'
+          error: 'Missing or invalid "messages" array.'
         });
       }
 
-      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${effectiveKey}`
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature,
-          max_tokens
-        })
-      });
+      const result = await executeGroqWithFailover(effectiveKey, requestedModel, messages, temperature, max_tokens);
 
-      if (groqRes.ok) {
-        const data = await groqRes.json();
-        const content = data.choices?.[0]?.message?.content || '';
+      if (result.success) {
         return sendJson(res, 200, {
           success: true,
-          content,
-          model: data.model || model
+          content: result.content,
+          model: result.model
         });
       }
 
-      const errData = await groqRes.json().catch(() => ({}));
-      const status = groqRes.status;
-      let userFriendlyMessage = errData.error?.message || `HTTP ${status}`;
-
-      if (status === 401) {
-        userFriendlyMessage = 'Invalid Groq API key. Please check the GROQ_API_KEY setting in your .env file.';
-      } else if (status === 404 || userFriendlyMessage.includes('does not exist')) {
-        userFriendlyMessage = `The model "${model}" does not exist or you do not have access to it. Please use a supported model such as "${DEFAULT_GROQ_MODEL}".`;
-      } else if (status === 429) {
-        userFriendlyMessage = 'Groq rate limit reached. Please wait a few seconds and try again.';
-      }
-
-      return sendJson(res, status, {
+      return sendJson(res, 500, {
         success: false,
-        error: `Groq error: ${userFriendlyMessage}`,
-        code: errData.error?.code || 'GROQ_ERROR'
+        error: result.error
       });
     } catch (e) {
       return sendJson(res, 502, {
         success: false,
-        error: `Network failure connecting to Groq API: ${e.message}`,
-        code: 'NETWORK_ERROR'
+        error: e.message
       });
     }
   }
 
-  // Not handled
   return sendJson(res, 404, {
     success: false,
     error: `API route not found: ${pathname}`

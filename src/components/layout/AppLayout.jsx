@@ -4,7 +4,7 @@ import Sidebar from './Sidebar';
 import TopNav from './TopNav';
 import MobileNav from './MobileNav';
 
-export default function AppLayout({ currentTab, onSelectTab, onOpenAddTxn, onOpenScanBill, onOpenApiKeyModal, searchQuery, onSearchChange, children }) {
+export default function AppLayout({ currentTab, onSelectTab, onOpenAddTxn, onOpenScanBill, searchQuery, onSearchChange, children }) {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
   return (
@@ -22,7 +22,6 @@ export default function AppLayout({ currentTab, onSelectTab, onOpenAddTxn, onOpe
           currentTab={currentTab}
           onOpenAddTxn={onOpenAddTxn}
           onOpenScanBill={onOpenScanBill}
-          onOpenApiKeyModal={onOpenApiKeyModal}
           searchQuery={searchQuery}
           onSearchChange={onSearchChange}
           onSelectTab={onSelectTab}

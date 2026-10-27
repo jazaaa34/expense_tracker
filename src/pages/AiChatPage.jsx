@@ -2,9 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useWallet } from '../context/WalletContext';
 import { aiService } from '../services/aiService';
 import { formatINR } from '../services/storageService';
-import { Sparkles, Send, Bot, User, Cpu, RefreshCw, Trash2, HelpCircle } from 'lucide-react';
+import { Sparkles, Send, Bot, User, RefreshCw, Trash2, HelpCircle } from 'lucide-react';
 
-export default function AiChatPage({ onOpenApiKeyModal }) {
+export default function AiChatPage() {
   const store = useWallet();
   const { user, aiQuestions, addAiQuestion, deleteAiQuestion, clearAiQuestions } = store;
   
@@ -21,7 +21,6 @@ export default function AiChatPage({ onOpenApiKeyModal }) {
   const messagesEndRef = useRef(null);
 
   const [hasKey, setHasKey] = useState(false);
-  const [currentModel, setCurrentModel] = useState(aiService.getModel());
 
   useEffect(() => {
     let isMounted = true;
@@ -29,18 +28,15 @@ export default function AiChatPage({ onOpenApiKeyModal }) {
       const st = await aiService.getServerStatus();
       if (isMounted) {
         setHasKey(Boolean(st.configured));
-        setCurrentModel(aiService.getModel());
       }
     };
     checkStatus();
 
     const handleUpdate = () => checkStatus();
     window.addEventListener('storage', handleUpdate);
-    window.addEventListener('walletweather_model_updated', handleUpdate);
     return () => {
       isMounted = false;
       window.removeEventListener('storage', handleUpdate);
-      window.removeEventListener('walletweather_model_updated', handleUpdate);
     };
   }, []);
 
@@ -129,31 +125,12 @@ export default function AiChatPage({ onOpenApiKeyModal }) {
               <div style={{ fontSize: '1rem', fontWeight: 900, color: 'var(--text-primary)' }}>
                 WalletWeather AI Advisor
               </div>
-              <div style={{ fontSize: '0.75rem', color: hasKey ? 'var(--income-green)' : 'var(--accent-honey)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: hasKey ? 'var(--income-green)' : 'var(--accent-honey)', display: 'inline-block' }}></span>
-                <span>{hasKey ? `Groq Backend (${currentModel})` : `AI Assistant (${currentModel})`}</span>
+              <div style={{ fontSize: '0.75rem', color: 'var(--income-green)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--income-green)', display: 'inline-block' }}></span>
+                <span>Active & Ready</span>
               </div>
             </div>
           </div>
-
-          <button
-            onClick={onOpenApiKeyModal}
-            style={{
-              padding: '6px 12px',
-              borderRadius: '8px',
-              backgroundColor: 'var(--surface-muted)',
-              border: '1px solid var(--border-light)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              color: 'var(--text-secondary)'
-            }}
-          >
-            <Cpu size={14} />
-            <span>AI Model</span>
-          </button>
         </div>
 
         {/* Message Stream */}
