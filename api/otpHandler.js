@@ -11,10 +11,24 @@ function sendJson(res, statusCode, data) {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.end(JSON.stringify(data));
 }
 
 function parseBody(req) {
+  if (req.body !== undefined && req.body !== null) {
+    if (typeof req.body === 'object') return Promise.resolve(req.body);
+    if (typeof req.body === 'string') {
+      try {
+        return Promise.resolve(req.body ? JSON.parse(req.body) : {});
+      } catch {
+        return Promise.reject(new Error('Invalid JSON payload'));
+      }
+    }
+  }
+
   return new Promise((resolve, reject) => {
     let body = '';
     req.on('data', chunk => {
@@ -91,11 +105,23 @@ function createEmailHtml(otp, name) {
 }
 
 export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa34@gmail.com', senderName = 'WalletWeather') {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204;
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.end();
+  }
+
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
 
+  const isSendOtp = pathname === '/api/auth/send-otp' || pathname === '/send-otp' || pathname.endsWith('/send-otp');
+  const isVerifyOtp = pathname === '/api/auth/verify-otp' || pathname === '/verify-otp' || pathname.endsWith('/verify-otp');
+
   // 1. POST /api/auth/send-otp - Generate OTP and dispatch via Brevo
-  if (req.method === 'POST' && pathname === '/api/auth/send-otp') {
+  if (req.method === 'POST' && isSendOtp) {
     if (!brevoApiKey) {
       return sendJson(res, 503, {
         success: false,
@@ -186,7 +212,7 @@ export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa3
   }
 
   // 2. POST /api/auth/verify-otp - Verify user submitted OTP
-  if (req.method === 'POST' && pathname === '/api/auth/verify-otp') {
+  if (req.method === 'POST' && isVerifyOtp) {
     try {
       const body = await parseBody(req);
       const email = (body.email || '').trim().toLowerCase();

@@ -19,6 +19,7 @@ import {
   formatINR 
 } from '../../services/storageService';
 import { compressImage } from '../../utils/imageCompressor';
+import { apiRequest } from '../../services/apiClient';
 
 const MAX_SIZE_MB = 5;
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
@@ -150,19 +151,16 @@ export default function BillUploadModal({ isOpen, onClose, onSaveExpense, onFall
     setErrorMsg('');
 
     try {
-      const response = await fetch('/api/bills/extract', {
+      const { ok, data: result } = await apiRequest('/api/bills/extract', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image: imageBase64,
           mimeType: selectedFile?.type || 'image/jpeg'
         })
       });
 
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Failed to extract bill details.');
+      if (!ok || !result?.success) {
+        throw new Error(result?.error || 'Failed to extract bill details.');
       }
 
       const extracted = result.data || {};

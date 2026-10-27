@@ -1,0 +1,35 @@
+{
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/api/auth/send-otp",
+      "destination": "/api/auth/send-otp"
+    },
+    {
+      "source": "/api/auth/verify-otp",
+      "destination": "/api/auth/verify-otp"
+    },
+    {
+      "source": "/api/bills/extract",
+      "destination": "/api/bills/extract"
+    },
+    {
+      "source": "/api/chat",
+      "destination": "/api/chat"
+    },
+    {
+      "source": "/api/status",
+      "destination": "/api/status"
+    },
+    {
+      "source": "/api/test-connection",
+      "destination": "/api/test-connection"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

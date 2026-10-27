@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { storageService, STORAGE_KEYS } from '../services/storageService';
+import { apiRequest } from '../services/apiClient';
 import { ArrowLeft, UserPlus, Mail, Lock, User, KeyRound, CheckCircle2, RefreshCw, ArrowRight, Edit2, ShieldCheck } from 'lucide-react';
 
 export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
@@ -69,15 +70,13 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
 
     setIsSendingOtp(true);
     try {
-      const res = await fetch('/api/auth/send-otp', {
+      const { ok, data } = await apiRequest('/api/auth/send-otp', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail, name: cleanName })
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to send verification email.');
+      if (!ok || !data?.success) {
+        throw new Error(data?.error || 'Failed to send verification email.');
       }
 
       setStep('otp');
@@ -98,15 +97,13 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
     setIsSendingOtp(true);
 
     try {
-      const res = await fetch('/api/auth/send-otp', {
+      const { ok, data } = await apiRequest('/api/auth/send-otp', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim().toLowerCase(), name: name.trim() })
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to resend code.');
+      if (!ok || !data?.success) {
+        throw new Error(data?.error || 'Failed to resend code.');
       }
 
       setResendCooldown(60);
@@ -132,18 +129,16 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
     setIsVerifying(true);
 
     try {
-      const res = await fetch('/api/auth/verify-otp', {
+      const { ok, data } = await apiRequest('/api/auth/verify-otp', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
           otp: cleanOtp
         })
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Verification failed.');
+      if (!ok || !data?.success) {
+        throw new Error(data?.error || 'Verification failed.');
       }
 
       // OTP verified! Create user account in AuthContext

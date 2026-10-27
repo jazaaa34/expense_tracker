@@ -30,10 +30,24 @@ function sendJson(res, statusCode, data) {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.end(JSON.stringify(data));
 }
 
 function parseBody(req) {
+  if (req.body !== undefined && req.body !== null) {
+    if (typeof req.body === 'object') return Promise.resolve(req.body);
+    if (typeof req.body === 'string') {
+      try {
+        return Promise.resolve(req.body ? JSON.parse(req.body) : {});
+      } catch {
+        return Promise.reject(new Error('Invalid JSON payload'));
+      }
+    }
+  }
+
   return new Promise((resolve, reject) => {
     let body = '';
     req.on('data', chunk => {
@@ -55,11 +69,24 @@ function parseBody(req) {
 }
 
 export async function handleGroqApi(req, res, apiKey, configuredModel = DEFAULT_GROQ_MODEL) {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204;
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.end();
+  }
+
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
 
+  const isStatus = pathname === '/api/status' || pathname === '/status' || pathname.endsWith('/status');
+  const isTest = pathname === '/api/test-connection' || pathname === '/test-connection' || pathname.endsWith('/test-connection');
+  const isChat = pathname === '/api/chat' || pathname === '/chat' || pathname.endsWith('/chat');
+
   // 1. GET /api/status - Check if backend has GROQ_API_KEY configured (without exposing the secret)
-  if (req.method === 'GET' && pathname === '/api/status') {
+  if (req.method === 'GET' && isStatus) {
     const isConfigured = Boolean(apiKey && apiKey.startsWith('gsk_'));
     return sendJson(res, 200, {
       success: true,
@@ -70,7 +97,7 @@ export async function handleGroqApi(req, res, apiKey, configuredModel = DEFAULT_
   }
 
   // 2. POST /api/test-connection - Test Groq API connectivity with configured key
-  if (req.method === 'POST' && pathname === '/api/test-connection') {
+  if (req.method === 'POST' && isTest) {
     if (!apiKey || !apiKey.startsWith('gsk_')) {
       return sendJson(res, 400, {
         success: false,
@@ -121,7 +148,7 @@ export async function handleGroqApi(req, res, apiKey, configuredModel = DEFAULT_
   }
 
   // 3. POST /api/chat - Proxy chat completion request to Groq
-  if (req.method === 'POST' && pathname === '/api/chat') {
+  if (req.method === 'POST' && isChat) {
     if (!apiKey || !apiKey.startsWith('gsk_')) {
       return sendJson(res, 503, {
         success: false,

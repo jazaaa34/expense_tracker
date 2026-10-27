@@ -13,10 +13,24 @@ function sendJson(res, statusCode, data) {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.end(JSON.stringify(data));
 }
 
 function parseJsonBody(req, maxBytes = 10 * 1024 * 1024) {
+  if (req.body !== undefined && req.body !== null) {
+    if (typeof req.body === 'object') return Promise.resolve(req.body);
+    if (typeof req.body === 'string') {
+      try {
+        return Promise.resolve(req.body ? JSON.parse(req.body) : {});
+      } catch {
+        return Promise.reject(new Error('Invalid JSON request payload.'));
+      }
+    }
+  }
+
   return new Promise((resolve, reject) => {
     let body = '';
     let bytesReceived = 0;
@@ -251,11 +265,21 @@ RULES:
  * Handles POST /api/bills/extract
  */
 export async function handleBillExtractApi(req, res, configKeys) {
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204;
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.end();
+  }
+
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
 
+  const isExtract = pathname === '/api/bills/extract' || pathname === '/extract' || pathname.endsWith('/extract') || pathname.endsWith('/bills/extract');
+
   // Only handle POST /api/bills/extract
-  if (pathname !== '/api/bills/extract') {
+  if (!isExtract) {
     return sendJson(res, 404, {
       success: false,
       error: `Endpoint ${pathname} not found.`

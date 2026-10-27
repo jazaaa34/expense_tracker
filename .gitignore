@@ -10,8 +10,8 @@ dist-ssr/
 
 # Environment variables & secrets (NEVER commit to GitHub)
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
 # Editor directories
 .vscode/*

@@ -10,6 +10,7 @@
 // ==============================================================================
 
 import { storageService, STORAGE_KEYS, DEFAULT_GROQ_MODEL, formatINR } from './storageService.js';
+import { apiRequest } from './apiClient.js';
 
 // Purge any legacy API keys that may have been previously stored in browser localStorage
 if (typeof window !== 'undefined') {
@@ -46,11 +47,11 @@ export const aiService = {
 
   async getServerStatus() {
     try {
-      const res = await fetch('/api/status');
-      if (res.ok) {
-        return await res.json();
+      const { ok, data } = await apiRequest('/api/status');
+      if (ok && data) {
+        return data;
       }
-      return { configured: false, error: `HTTP ${res.status}` };
+      return { configured: false, error: data?.error || 'Unable to check status' };
     } catch (e) {
       return { configured: false, error: e.message };
     }
@@ -58,16 +59,14 @@ export const aiService = {
 
   async testServerConnection(model = this.getModel()) {
     try {
-      const res = await fetch('/api/test-connection', {
+      const { ok, data } = await apiRequest('/api/test-connection', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model })
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) {
+      if (ok && data?.success) {
         return { success: true, message: data.message || `Connected to Groq with ${model}!`, model };
       }
-      return { success: false, message: data.error || `HTTP ${res.status}: Connection failed` };
+      return { success: false, message: data?.error || 'Connection test failed' };
     } catch (e) {
       return { success: false, message: `Could not reach backend server: ${e.message}` };
     }
@@ -148,24 +147,19 @@ Instructions:
         payload.model = clientModel;
       }
 
-      const res = await fetch('/api/chat', {
+      const { ok, status, data } = await apiRequest('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.content && data.content.trim()) {
-          return data.content.trim();
+      if (ok && data?.success && data?.content && data.content.trim()) {
+        return data.content.trim();
+      } else if (!ok) {
+        // If Groq returned a specific error (e.g. invalid key, model access, rate limit)
+        if (status === 401 || status === 404 || status === 429) {
+          return `⚠️ **Backend Groq Notice:** ${data?.error || `HTTP ${status}`}\n\n*Here is a conversational answer:* \n\n` + this.generateConversationalReply(prompt, summary);
         }
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        // If Groq returned a specific error (e.g. invalid key or rate limit)
-        if (res.status === 401 || res.status === 404 || res.status === 429) {
-          return `⚠️ **Backend Groq Notice:** ${errData.error || `HTTP ${res.status}`}\n\n*Here is a conversational answer:* \n\n` + this.generateConversationalReply(prompt, summary);
-        }
-        // If API key is missing on the server, proceed silently to free client tier
+        // If API key is missing on the server, proceed to fallback tier
       }
     } catch (e) {
       console.warn('Backend /api/chat not reachable, checking client tiers:', e.message);
