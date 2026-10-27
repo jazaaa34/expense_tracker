@@ -130,7 +130,7 @@ export default function IntroPage({ onNavigateLogin, onNavigateSignup }) {
             marginBottom: '32px',
             maxWidth: '520px'
           }}>
-            Stop tracking in the rearview mirror. WalletWeather analyzes peak spending days, detects double charges, and coaches you with integrated Groq Llama 3.3 AI intelligence.
+            Stop tracking in the rearview mirror. WalletWeather analyzes peak spending days, detects double charges, and coaches you with integrated Groq AI intelligence.
           </p>
 
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -206,7 +206,7 @@ export default function IntroPage({ onNavigateLogin, onNavigateSignup }) {
             </div>
             <div style={{ width: '1px', height: '40px', backgroundColor: 'var(--border-light)' }} />
             <div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--accent-honey)' }}>Llama 3.3</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--accent-honey)' }}>GPT-OSS</div>
               <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Groq AI Advisor</div>
             </div>
           </div>

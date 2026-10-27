@@ -3,8 +3,7 @@
 // Secure Backend Proxy + Client-Side Multi-Tier Conversational AI
 //
 // 1. Backend Server Proxy (/api/chat) -> Reads GROQ_API_KEY securely from .env
-// 2. Browser Puter.js GPT-4o-mini (Fallback if server key not set)
-// 3. Conversational Local Engine (Fast, human-like responses for all questions)
+// 2. Conversational Local Engine (Fast, human-like responses for all questions)
 //
 // SECURITY: GROQ_API_KEY is never exposed in browser storage or client JS.
 // ==============================================================================
@@ -137,7 +136,7 @@ Instructions:
       { role: 'user', content: prompt }
     ];
 
-    // TIER 1: Backend Secure Proxy (/api/chat) -> Uses server-side GROQ_API_KEY
+    // Primary: Backend Groq AI Proxy (/api/chat) -> Uses server-side GROQ_API_KEY
     try {
       const payload = { messages };
       const clientModel = this.getModel();
@@ -154,31 +153,17 @@ Instructions:
 
       if (ok && data?.success && data?.content && data.content.trim()) {
         return data.content.trim();
-      } else if (!ok) {
-        // If Groq returned a specific error (e.g. invalid key, model access, rate limit)
-        if (status === 401 || status === 404 || status === 429) {
-          return `⚠️ **Backend Groq Notice:** ${data?.error || `HTTP ${status}`}\n\n*Here is a conversational answer:* \n\n` + this.generateConversationalReply(prompt, summary);
-        }
-        // If API key is missing on the server, proceed to fallback tier
+      }
+
+      if (!ok && data?.error) {
+        return `⚠️ **Groq AI Notice:** ${data.error}\n\n*Here is personalized guidance from your financial ledger:* \n\n` + this.generateConversationalReply(prompt, summary);
       }
     } catch (e) {
-      console.warn('Backend /api/chat not reachable, checking client tiers:', e.message);
+      console.warn('Backend /api/chat error:', e.message);
+      return `⚠️ **Backend Notice (${e.message}).**\n\n*Here is guidance from your financial ledger:* \n\n` + this.generateConversationalReply(prompt, summary);
     }
 
-    // TIER 2: Puter.js in-browser AI (Runs ChatGPT / GPT-4o-mini free in browser if available)
-    if (typeof window !== 'undefined' && window.puter?.ai?.chat) {
-      try {
-        const res = await window.puter.ai.chat(messages, { model: 'gpt-4o-mini' });
-        const reply = res?.message?.content || (typeof res === 'string' ? res : res?.toString?.());
-        if (reply && reply.trim()) {
-          return reply.trim();
-        }
-      } catch (e) {
-        console.warn('Puter.js AI chat not available:', e);
-      }
-    }
-
-    // TIER 3: Truly Conversational Local AI Engine (Replies naturally like ChatGPT, no robotic templates)
+    // Fallback: Truly Conversational Local AI Engine (100% client-safe, zero external key prompts)
     return this.generateConversationalReply(prompt, summary);
   },
 

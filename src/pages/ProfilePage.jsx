@@ -5,7 +5,7 @@ import { exportService } from '../services/exportService';
 import { aiService } from '../services/aiService';
 import { formatINR, EXPENSE_CATEGORIES } from '../services/storageService';
 import Modal from '../components/common/Modal';
-import { User, RotateCcw, Download, Key, Edit2, ShieldAlert } from 'lucide-react';
+import { User, RotateCcw, Download, Cpu, Edit2, ShieldAlert } from 'lucide-react';
 
 export default function ProfilePage({ onOpenApiKeyModal }) {
   const { user, updateProfile } = useAuth();
@@ -189,7 +189,7 @@ export default function ProfilePage({ onOpenApiKeyModal }) {
           Data & AI Configuration
         </h2>
 
-        {/* AI Key Card */}
+        {/* AI Model Card */}
         <div style={{
           padding: '16px',
           borderRadius: '14px',
@@ -199,11 +199,11 @@ export default function ProfilePage({ onOpenApiKeyModal }) {
           justifyContent: 'space-between'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Key size={20} color={hasKey ? 'var(--income-green)' : 'var(--accent-honey)'} />
+            <Cpu size={20} color={hasKey ? 'var(--income-green)' : 'var(--primary)'} />
             <div>
-              <div style={{ fontWeight: 800, fontSize: '0.875rem' }}>Groq AI Backend Engine</div>
+              <div style={{ fontWeight: 800, fontSize: '0.875rem' }}>Groq AI Inference Engine</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                {hasKey ? `Server Connected (${model})` : `Server Key Not Set (Using client assistant: ${model})`}
+                {hasKey ? `Backend Active (${model})` : `Inference Model: ${model}`}
               </div>
             </div>
           </div>
@@ -217,7 +217,7 @@ export default function ProfilePage({ onOpenApiKeyModal }) {
               fontSize: '0.8125rem'
             }}
           >
-            Configure
+            Select Model
           </button>
         </div>
 

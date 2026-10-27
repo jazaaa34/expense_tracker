@@ -68,10 +68,10 @@ export default function GroqKeyModal({ isOpen, onClose }) {
             )}
             <div>
               <div style={{ fontWeight: 800, fontSize: '0.8125rem' }}>
-                {isConfigured ? 'Groq AI Backend Connected' : 'GROQ_API_KEY Missing on Server'}
+                {isConfigured ? 'Groq AI Backend Connected' : 'Groq AI Backend Status'}
               </div>
               <div style={{ fontSize: '0.6875rem', opacity: 0.85, marginTop: '1px' }}>
-                {isConfigured ? 'Loaded securely from server .env (never exposed to browser)' : 'Add GROQ_API_KEY in .env file'}
+                {isConfigured ? 'Connected securely via server environment (GROQ_API_KEY)' : 'Server environment variable (GROQ_API_KEY) managed in Vercel'}
               </div>
             </div>
           </div>

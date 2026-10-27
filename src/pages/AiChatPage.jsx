@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useWallet } from '../context/WalletContext';
 import { aiService } from '../services/aiService';
 import { formatINR } from '../services/storageService';
-import { Sparkles, Send, Bot, User, Key, RefreshCw, Trash2, HelpCircle } from 'lucide-react';
+import { Sparkles, Send, Bot, User, Cpu, RefreshCw, Trash2, HelpCircle } from 'lucide-react';
 
 export default function AiChatPage({ onOpenApiKeyModal }) {
   const store = useWallet();
@@ -151,8 +151,8 @@ export default function AiChatPage({ onOpenApiKeyModal }) {
               color: 'var(--text-secondary)'
             }}
           >
-            <Key size={14} />
-            <span>AI Backend & Models</span>
+            <Cpu size={14} />
+            <span>AI Model</span>
           </button>
         </div>
 

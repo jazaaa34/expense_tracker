@@ -78,6 +78,11 @@ export async function handleGroqApi(req, res, apiKey, configuredModel = DEFAULT_
     return res.end();
   }
 
+  // Sanitize key and model with fallback to process.env
+  const effectiveKey = (apiKey || process.env.GROQ_API_KEY || '').trim().replace(/^['"]|['"]$/g, '');
+  const effectiveModel = (configuredModel || process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL).trim().replace(/^['"]|['"]$/g, '');
+  const hasKey = Boolean(effectiveKey && (effectiveKey.startsWith('gsk_') || effectiveKey.length >= 20));
+
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
 
@@ -87,34 +92,33 @@ export async function handleGroqApi(req, res, apiKey, configuredModel = DEFAULT_
 
   // 1. GET /api/status - Check if backend has GROQ_API_KEY configured (without exposing the secret)
   if (req.method === 'GET' && isStatus) {
-    const isConfigured = Boolean(apiKey && apiKey.startsWith('gsk_'));
     return sendJson(res, 200, {
       success: true,
-      configured: isConfigured,
-      model: configuredModel || DEFAULT_GROQ_MODEL,
+      configured: hasKey,
+      model: effectiveModel,
       supportedModels: SUPPORTED_GROQ_MODELS
     });
   }
 
   // 2. POST /api/test-connection - Test Groq API connectivity with configured key
   if (req.method === 'POST' && isTest) {
-    if (!apiKey || !apiKey.startsWith('gsk_')) {
+    if (!hasKey) {
       return sendJson(res, 400, {
         success: false,
-        error: 'GROQ_API_KEY is not configured on the server. Please set GROQ_API_KEY in your .env file.',
+        error: 'GROQ_API_KEY is not configured on the server. Please add GROQ_API_KEY in your Vercel Project Settings (Environment Variables).',
         code: 'API_KEY_MISSING'
       });
     }
 
     try {
       const body = await parseBody(req);
-      const testModel = resolveModel(body.model, configuredModel);
+      const testModel = resolveModel(body.model, effectiveModel);
 
       const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': `Bearer ${effectiveKey}`
         },
         body: JSON.stringify({
           model: testModel,
@@ -149,10 +153,10 @@ export async function handleGroqApi(req, res, apiKey, configuredModel = DEFAULT_
 
   // 3. POST /api/chat - Proxy chat completion request to Groq
   if (req.method === 'POST' && isChat) {
-    if (!apiKey || !apiKey.startsWith('gsk_')) {
+    if (!hasKey) {
       return sendJson(res, 503, {
         success: false,
-        error: 'GROQ_API_KEY is not configured on the server. Please add GROQ_API_KEY=your_key to your .env file and restart the server.',
+        error: 'GROQ_API_KEY is not configured on the server. Please configure GROQ_API_KEY in your Vercel Project Settings (Environment Variables) and redeploy.',
         code: 'API_KEY_MISSING'
       });
     }
@@ -160,7 +164,7 @@ export async function handleGroqApi(req, res, apiKey, configuredModel = DEFAULT_
     try {
       const body = await parseBody(req);
       const messages = body.messages || [];
-      const model = resolveModel(body.model, configuredModel);
+      const model = resolveModel(body.model, effectiveModel);
       const temperature = typeof body.temperature === 'number' ? body.temperature : 0.7;
       const max_tokens = typeof body.max_tokens === 'number' ? body.max_tokens : 1024;
 
@@ -176,7 +180,7 @@ export async function handleGroqApi(req, res, apiKey, configuredModel = DEFAULT_
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': `Bearer ${effectiveKey}`
         },
         body: JSON.stringify({
           model,
