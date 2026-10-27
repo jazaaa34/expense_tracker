@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { storageService, STORAGE_KEYS } from '../services/storageService';
 import { apiRequest } from '../services/apiClient';
@@ -20,6 +20,7 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
   const [infoMessage, setInfoMessage] = useState('');
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const verifyingRef = useRef(false);
 
   // Timer countdown effect
   useEffect(() => {
@@ -118,6 +119,8 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
   // Step 2: Verify OTP and finalize signup
   const handleVerifyOtp = async (e, directOtp) => {
     if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    if (verifyingRef.current) return;
+
     const candidate = typeof directOtp === 'string' ? directOtp : otp;
     const cleanOtp = candidate.replace(/\D/g, '').trim();
 
@@ -126,11 +129,10 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
       return;
     }
 
-    if (isVerifying) return;
-
+    verifyingRef.current = true;
+    setIsVerifying(true);
     setError('');
     setInfoMessage('Verifying your code...');
-    setIsVerifying(true);
 
     try {
       const { ok, data } = await apiRequest('/api/auth/verify-otp', {
@@ -152,12 +154,14 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
       if (!signRes.success) {
         setError(signRes.message || 'Signup failed after verification.');
         setIsVerifying(false);
+        verifyingRef.current = false;
       }
       // On success, AuthContext sets current user and App automatically redirects
     } catch (err) {
       setError(err.message || 'Incorrect verification code. Please try again.');
       setInfoMessage('');
       setIsVerifying(false);
+      verifyingRef.current = false;
     }
   };
 
@@ -469,7 +473,7 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
                       const val = e.target.value.replace(/\D/g, '').slice(0, 6);
                       setOtp(val);
                       if (error) setError('');
-                      if (val.length === 6 && !isVerifying) {
+                      if (val.length === 6 && !isVerifying && !verifyingRef.current) {
                         handleVerifyOtp(null, val);
                       }
                     }}

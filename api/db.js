@@ -237,21 +237,52 @@ export function isDbConnected() {
 
 // ==============================================================================
 // OTP OPERATIONS
-// ==============================================================================
+// Active OTP memory store & recent verification cache for fast lookup and race-condition prevention
+const activeOtps = new Map();
+const recentlyVerified = new Map(); // email -> { timestamp, otp }
 
 export async function saveOtp(email, otp, name = '') {
-  const cleanEmail = email.toLowerCase().trim();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+  const cleanEmail = (email || '').toLowerCase().trim();
+  const cleanOtp = String(otp || '').trim();
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins validity
 
-  const conn = await connectToDatabase();
-  if (conn.connected && mongoDb) {
-    try {
+  // 1. In-memory cache (instant lookup)
+  activeOtps.set(cleanEmail, {
+    email: cleanEmail,
+    otp: cleanOtp,
+    name: name ? name.trim() : '',
+    createdAt: Date.now(),
+    expiresAt: expiresAt.getTime(),
+    attempts: 0
+  });
+
+  // 2. Local persistent JSON store (data/db.json)
+  try {
+    const db = readLocalDb();
+    if (!db.otps) db.otps = {};
+    db.otps[cleanEmail] = {
+      email: cleanEmail,
+      otp: cleanOtp,
+      name: name ? name.trim() : '',
+      createdAt: Date.now(),
+      expiresAt: expiresAt.getTime(),
+      attempts: 0
+    };
+    writeLocalDb(db);
+  } catch (localErr) {
+    console.warn('[LocalDb] Failed saving OTP locally:', localErr.message);
+  }
+
+  // 3. MongoDB collection (remote store)
+  try {
+    const conn = await connectToDatabase();
+    if (conn.connected && mongoDb) {
       await mongoDb.collection('otps').updateOne(
         { email: cleanEmail },
         {
           $set: {
             email: cleanEmail,
-            otp: String(otp).trim(),
+            otp: cleanOtp,
             name: name ? name.trim() : '',
             createdAt: new Date(),
             expiresAt,
@@ -260,93 +291,132 @@ export async function saveOtp(email, otp, name = '') {
         },
         { upsert: true }
       );
-      return { success: true };
-    } catch (e) {
-      console.error('[MongoDB] Error saving OTP:', e.message);
     }
+  } catch (mongoErr) {
+    console.warn('[MongoDB] Failed saving OTP remotely:', mongoErr.message);
   }
 
-  // Fallback: Local persistent store
-  const db = readLocalDb();
-  if (!db.otps) db.otps = {};
-  db.otps[cleanEmail] = {
-    email: cleanEmail,
-    otp: String(otp).trim(),
-    name: name ? name.trim() : '',
-    createdAt: Date.now(),
-    expiresAt: expiresAt.getTime(),
-    attempts: 0
-  };
-  writeLocalDb(db);
   return { success: true };
 }
 
 export async function verifyOtp(email, submittedOtp) {
-  const cleanEmail = email.toLowerCase().trim();
-  const cleanOtp = String(submittedOtp || '').trim();
+  const cleanEmail = (email || '').toLowerCase().trim();
+  const cleanOtp = String(submittedOtp || '').replace(/\D/g, '').trim();
 
-  const conn = await connectToDatabase();
-  if (conn.connected && mongoDb) {
+  if (!cleanEmail || !cleanOtp) {
+    return { success: false, error: 'Email and 6-digit verification code are required.' };
+  }
+
+  // 0. Double-submit protection: check if this exact email and OTP was verified within the last 2 minutes
+  const recent = recentlyVerified.get(cleanEmail);
+  if (recent && (Date.now() - recent.timestamp < 120000) && recent.otp === cleanOtp) {
+    return { success: true, verified: true, message: 'Email verified successfully.' };
+  }
+
+  // Multi-tier record lookup: Memory -> MongoDB -> Local JSON DB
+  let record = activeOtps.get(cleanEmail) || null;
+
+  if (!record) {
     try {
-      const record = await mongoDb.collection('otps').findOne({ email: cleanEmail });
-      if (!record) {
-        return { success: false, error: 'No active verification code found for this email. Please request a new code.' };
+      const conn = await connectToDatabase();
+      if (conn.connected && mongoDb) {
+        const mongoRec = await mongoDb.collection('otps').findOne({ email: cleanEmail });
+        if (mongoRec) {
+          record = {
+            email: mongoRec.email,
+            otp: String(mongoRec.otp || '').trim(),
+            expiresAt: new Date(mongoRec.expiresAt).getTime(),
+            attempts: mongoRec.attempts || 0
+          };
+        }
       }
-
-      if (new Date() > new Date(record.expiresAt)) {
-        await mongoDb.collection('otps').deleteOne({ email: cleanEmail });
-        return { success: false, error: 'Verification code has expired. Please request a new code.' };
-      }
-
-      const attempts = (record.attempts || 0) + 1;
-      if (attempts > 5) {
-        await mongoDb.collection('otps').deleteOne({ email: cleanEmail });
-        return { success: false, error: 'Too many incorrect attempts. Please request a fresh verification code.' };
-      }
-
-      if (record.otp !== cleanOtp) {
-        await mongoDb.collection('otps').updateOne({ email: cleanEmail }, { $set: { attempts } });
-        const remaining = 5 - attempts;
-        return { success: false, error: `Incorrect verification code. ${remaining > 0 ? `${remaining} attempts remaining.` : 'Code expired.'}` };
-      }
-
-      // Valid OTP! Delete it
-      await mongoDb.collection('otps').deleteOne({ email: cleanEmail });
-      return { success: true, verified: true };
     } catch (e) {
-      console.error('[MongoDB] Error verifying OTP:', e.message);
+      console.warn('[MongoDB] Error finding OTP:', e.message);
     }
   }
 
-  // Fallback: Local persistent store
-  const db = readLocalDb();
-  const record = db.otps ? db.otps[cleanEmail] : null;
+  if (!record) {
+    try {
+      const db = readLocalDb();
+      if (db.otps && db.otps[cleanEmail]) {
+        record = db.otps[cleanEmail];
+      }
+    } catch (e) {
+      console.warn('[LocalDb] Error reading OTP:', e.message);
+    }
+  }
 
+  // If no record found in any tier
   if (!record) {
     return { success: false, error: 'No active verification code found for this email. Please request a new code.' };
   }
 
-  if (Date.now() > record.expiresAt) {
-    delete db.otps[cleanEmail];
-    writeLocalDb(db);
+  // Check expiration
+  const expTime = typeof record.expiresAt === 'number' ? record.expiresAt : new Date(record.expiresAt).getTime();
+  if (Date.now() > expTime) {
+    activeOtps.delete(cleanEmail);
+    try {
+      const db = readLocalDb();
+      if (db.otps) { delete db.otps[cleanEmail]; writeLocalDb(db); }
+      if (mongoDb) await mongoDb.collection('otps').deleteOne({ email: cleanEmail });
+    } catch {}
     return { success: false, error: 'Verification code has expired. Please request a new code.' };
   }
 
-  record.attempts = (record.attempts || 0) + 1;
-  if (record.attempts > 5) {
-    delete db.otps[cleanEmail];
-    writeLocalDb(db);
+  // Check attempt limit
+  const attempts = (record.attempts || 0) + 1;
+  record.attempts = attempts;
+  if (attempts > 5) {
+    activeOtps.delete(cleanEmail);
+    try {
+      const db = readLocalDb();
+      if (db.otps) { delete db.otps[cleanEmail]; writeLocalDb(db); }
+      if (mongoDb) await mongoDb.collection('otps').deleteOne({ email: cleanEmail });
+    } catch {}
     return { success: false, error: 'Too many incorrect attempts. Please request a fresh verification code.' };
   }
 
-  if (record.otp !== cleanOtp) {
-    writeLocalDb(db);
-    const remaining = 5 - record.attempts;
+  // Verify OTP matches
+  if (String(record.otp || '').trim() !== cleanOtp) {
+    // Update attempts in all tiers
+    activeOtps.set(cleanEmail, record);
+    try {
+      const db = readLocalDb();
+      if (db.otps && db.otps[cleanEmail]) {
+        db.otps[cleanEmail].attempts = attempts;
+        writeLocalDb(db);
+      }
+      if (mongoDb) {
+        await mongoDb.collection('otps').updateOne({ email: cleanEmail }, { $set: { attempts } });
+      }
+    } catch {}
+    const remaining = 5 - attempts;
     return { success: false, error: `Incorrect verification code. ${remaining > 0 ? `${remaining} attempts remaining.` : 'Code expired.'}` };
   }
 
-  delete db.otps[cleanEmail];
-  writeLocalDb(db);
+  // Valid OTP! Cache in recentlyVerified for 2 minutes to guard against duplicate requests
+  recentlyVerified.set(cleanEmail, { timestamp: Date.now(), otp: cleanOtp });
+
+  // Cleanup old recentlyVerified items
+  for (const [k, v] of recentlyVerified.entries()) {
+    if (Date.now() - v.timestamp > 300000) recentlyVerified.delete(k);
+  }
+
+  // Remove from active stores
+  activeOtps.delete(cleanEmail);
+  try {
+    const db = readLocalDb();
+    if (db.otps && db.otps[cleanEmail]) {
+      delete db.otps[cleanEmail];
+      writeLocalDb(db);
+    }
+    if (mongoDb) {
+      await mongoDb.collection('otps').deleteOne({ email: cleanEmail });
+    }
+  } catch (cleanErr) {
+    console.warn('Error clearing verified OTP:', cleanErr.message);
+  }
+
   return { success: true, verified: true };
 }
 

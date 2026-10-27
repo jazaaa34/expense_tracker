@@ -8,6 +8,11 @@ import { handleDataApi } from "./api/dataHandler.js";
 function backendApiPlugin() {
   const handleApi = (req, res, mode) => {
     const env = loadEnv(mode, process.cwd(), "");
+    for (const [k, v] of Object.entries(env)) {
+      if (!process.env[k] && v) {
+        process.env[k] = v;
+      }
+    }
     if (req.url && req.url.startsWith("/api/bills/extract")) {
       const geminiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || "";
       const anthropicKey = process.env.ANTHROPIC_API_KEY || env.ANTHROPIC_API_KEY || "";
