@@ -11,6 +11,7 @@ import {
   parseCsvStatement, 
   parseXlsxStatement, 
   parsePdfStatement,
+  parseStatementTextMultiStrategy,
   extractUpiDetails, 
   classifyTransaction, 
   detectDuplicates,
@@ -202,6 +203,29 @@ assert.strictEqual(det6.isDebit, true, 'Microsoft should not falsely trigger CR 
 
 console.log('  Passed: Money sent vs received classified with 100% precision.\n');
 
+// ------------------------------------------------------------------------------
+// TEST 9: Multi-transaction PDF/Text Extraction (No 1-transaction truncation)
+// ------------------------------------------------------------------------------
+console.log('Test 9: Full multi-transaction extraction without truncation');
+const complexStatementText = `
+Statement Generated 2026-10-25 Available Balance 50,000.00
+2026-10-20
+UPI/DR/430192837492/Swiggy
+450.00
+2026-10-21
+UPI/DR/430192837493/Zomato
+320.00
+2026-10-22
+UPI/DR/430192837494/Uber
+250.00
+`;
+const fullResult = parseStatementTextMultiStrategy(complexStatementText);
+assert.strictEqual(fullResult.length >= 3, true, `Should extract all transactions (found: ${fullResult.length})`);
+assert.strictEqual(fullResult.some(t => t.merchant === 'Swiggy' || t.name.includes('Swiggy')), true);
+assert.strictEqual(fullResult.some(t => t.merchant === 'Zomato' || t.name.includes('Zomato')), true);
+assert.strictEqual(fullResult.some(t => t.merchant === 'Uber' || t.name.includes('Uber')), true);
+console.log('  Passed: All transactions parsed cleanly from stacked PDF statement text.\n');
+
 console.log('====================================================');
-console.log('✅ ALL UPI TRANSACTION IMPORTER TESTS PASSED (8/8)!');
+console.log('✅ ALL UPI TRANSACTION IMPORTER TESTS PASSED (9/9)!');
 console.log('====================================================\n');
