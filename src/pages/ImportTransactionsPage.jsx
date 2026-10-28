@@ -143,7 +143,23 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
       if (t.tempId !== tempId) return t;
       const updated = { ...t, [field]: value };
       if (field === 'type') {
-        updated.isExpense = value === 'expense';
+        const isExp = value === 'expense';
+        updated.isExpense = isExp;
+        if (isExp && (updated.category === 'Salary' || updated.category === 'Other Income' || updated.category === 'Rental Income')) {
+          updated.category = 'Other Expense';
+        } else if (!isExp && (updated.category === 'Other Expense' || updated.category === 'Food & Dining')) {
+          updated.category = 'Other Income';
+        }
+      }
+      if (field === 'isExpense') {
+        const isExp = Boolean(value);
+        updated.isExpense = isExp;
+        updated.type = isExp ? 'expense' : 'income';
+        if (isExp && (updated.category === 'Salary' || updated.category === 'Other Income' || updated.category === 'Rental Income')) {
+          updated.category = 'Other Expense';
+        } else if (!isExp && (updated.category === 'Other Expense' || updated.category === 'Food & Dining')) {
+          updated.category = 'Other Income';
+        }
       }
       return updated;
     }));
@@ -484,41 +500,39 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
 
             <div className="card" style={{ padding: '16px', borderLeft: '4px solid var(--expense-red)' }}>
               <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-                Total Debit Outflow
+                Money Sent (Deducted)
               </div>
               <div style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--expense-red)', margin: '4px 0 2px' }}>
-                {formatINR(totalDebit)}
+                -{formatINR(totalDebit)}
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Expenses in selected transactions
+              <div style={{ fontSize: '0.75rem', color: 'var(--expense-red)', fontWeight: 600 }}>
+                Deducted from Dashboard & History
               </div>
             </div>
 
             <div className="card" style={{ padding: '16px', borderLeft: '4px solid var(--income-green)' }}>
               <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-                Total Credit Inflow
+                Money Received (Added)
               </div>
               <div style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--income-green)', margin: '4px 0 2px' }}>
-                {formatINR(totalCredit)}
+                +{formatINR(totalCredit)}
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Income & refunds in selection
+              <div style={{ fontSize: '0.75rem', color: 'var(--income-green)', fontWeight: 600 }}>
+                Added to Dashboard & History
               </div>
             </div>
 
-            {duplicateCount > 0 && (
-              <div className="card" style={{ padding: '16px', borderLeft: '4px solid var(--warning-amber)', backgroundColor: 'rgba(245, 158, 11, 0.05)' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--warning-amber)', textTransform: 'uppercase' }}>
-                  Potential Duplicates
-                </div>
-                <div style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--warning-amber)', margin: '4px 0 2px' }}>
-                  {duplicateCount}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Unchecked by default (editable)
-                </div>
+            <div className="card" style={{ padding: '16px', borderLeft: `4px solid ${totalCredit >= totalDebit ? 'var(--income-green)' : 'var(--expense-red)'}` }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                Net Balance Impact
               </div>
-            )}
+              <div style={{ fontSize: '1.75rem', fontWeight: 900, color: totalCredit >= totalDebit ? 'var(--income-green)' : 'var(--expense-red)', margin: '4px 0 2px' }}>
+                {totalCredit >= totalDebit ? '+' : '-'}{formatINR(Math.abs(totalCredit - totalDebit))}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                {totalCredit >= totalDebit ? 'Account balance increases' : 'Account balance decreases'}
+              </div>
+            </div>
           </div>
 
           {/* Action Toolbar */}
@@ -666,7 +680,7 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
                   </th>
                   <th style={{ padding: '12px 14px', fontWeight: 800, color: 'var(--text-secondary)' }}>Date</th>
                   <th style={{ padding: '12px 14px', fontWeight: 800, color: 'var(--text-secondary)' }}>Payee / Merchant</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 800, color: 'var(--text-secondary)' }}>Type</th>
+                  <th style={{ padding: '12px 14px', fontWeight: 800, color: 'var(--text-secondary)' }}>Payment Flow</th>
                   <th style={{ padding: '12px 14px', fontWeight: 800, color: 'var(--text-secondary)' }}>Category</th>
                   <th style={{ padding: '12px 14px', fontWeight: 800, color: 'var(--text-secondary)', textAlign: 'right' }}>Amount</th>
                   <th style={{ padding: '12px 14px', fontWeight: 800, color: 'var(--text-secondary)' }}>UPI / Status</th>
@@ -733,26 +747,49 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
                       )}
                     </td>
 
-                    {/* Type Toggle */}
+                    {/* Payment Flow (Sent vs Received) */}
                     <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>
-                      <select
-                        value={t.type || (t.isExpense ? 'expense' : 'income')}
-                        onChange={(e) => handleUpdateRow(t.tempId, 'type', e.target.value)}
-                        style={{
-                          border: '1px solid var(--border-light)',
-                          borderRadius: '6px',
-                          padding: '5px 8px',
-                          fontSize: '0.75rem',
-                          fontWeight: 800,
-                          backgroundColor: '#FFFFFF',
-                          color: t.isExpense ? 'var(--expense-red)' : 'var(--income-green)'
-                        }}
-                      >
-                        <option value="expense">💸 Expense</option>
-                        <option value="income">💰 Income</option>
-                        <option value="refund">🔄 Refund</option>
-                        <option value="transfer">🔁 Transfer</option>
-                      </select>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateRow(t.tempId, 'isExpense', !t.isExpense)}
+                          title="Click to toggle between Money Sent (Deducted from balance) and Money Received (Added to balance)"
+                          style={{
+                            padding: '4px 9px',
+                            borderRadius: '6px',
+                            border: t.isExpense ? '1px solid #FECACA' : '1px solid #A7F3D0',
+                            backgroundColor: t.isExpense ? '#FEF2F2' : '#ECFDF5',
+                            color: t.isExpense ? '#DC2626' : '#059669',
+                            fontWeight: 800,
+                            fontSize: '0.6875rem',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          {t.isExpense ? '💸 Sent (- Deduct)' : '💰 Received (+ Add)'}
+                        </button>
+
+                        <select
+                          value={t.type || (t.isExpense ? 'expense' : 'income')}
+                          onChange={(e) => handleUpdateRow(t.tempId, 'type', e.target.value)}
+                          style={{
+                            border: '1px solid var(--border-light)',
+                            borderRadius: '6px',
+                            padding: '4px 6px',
+                            fontSize: '0.6875rem',
+                            fontWeight: 700,
+                            backgroundColor: '#FFFFFF',
+                            color: 'var(--text-secondary)'
+                          }}
+                        >
+                          <option value="expense">Expense</option>
+                          <option value="income">Income</option>
+                          <option value="refund">Refund</option>
+                          <option value="transfer">Transfer</option>
+                        </select>
+                      </div>
                     </td>
 
                     {/* Category Selector */}

@@ -13,7 +13,8 @@ import {
   parsePdfStatement,
   extractUpiDetails, 
   classifyTransaction, 
-  detectDuplicates 
+  detectDuplicates,
+  detectDebitOrCredit
 } from '../lib/statementParser.js';
 
 console.log('=== RUNNING UPI STATEMENT IMPORTER TEST SUITE ===\n');
@@ -177,6 +178,30 @@ assert.strictEqual(pdfResult.transactions[0].amount, 450);
 
 console.log('  Passed: PDF statement parsed and error cases handled securely.\n');
 
+// ------------------------------------------------------------------------------
+// TEST 8: Debit (Money Sent) vs Credit (Money Received) Precision
+// ------------------------------------------------------------------------------
+console.log('Test 8: Debit (Money Sent) vs Credit (Money Received) Precision');
+const det1 = detectDebitOrCredit('UPI/DR/430192837492/Swiggy', 0, 0, 450);
+assert.strictEqual(det1.isDebit, true, 'UPI/DR must be debit / expense');
+
+const det2 = detectDebitOrCredit('UPI/CR/430192837493/Rahul Kumar', 0, 0, 1200);
+assert.strictEqual(det2.isCredit, true, 'UPI/CR must be credit / income');
+
+const det3 = detectDebitOrCredit('Paid to Sharma Groceries', 0, 0, 850);
+assert.strictEqual(det3.isDebit, true, 'Paid to must be debit / expense');
+
+const det4 = detectDebitOrCredit('Received from Anita Sharma', 0, 0, 2000);
+assert.strictEqual(det4.isCredit, true, 'Received from must be credit / income');
+
+const det5 = detectDebitOrCredit('Baskin Robbins ICE CREAM Parlour', 0, 0, 320);
+assert.strictEqual(det5.isDebit, true, 'Ice Cream should not falsely trigger CR as credit');
+
+const det6 = detectDebitOrCredit('MICROSOFT AZURE CLOUD', 0, 0, 1500);
+assert.strictEqual(det6.isDebit, true, 'Microsoft should not falsely trigger CR as credit');
+
+console.log('  Passed: Money sent vs received classified with 100% precision.\n');
+
 console.log('====================================================');
-console.log('✅ ALL UPI TRANSACTION IMPORTER TESTS PASSED (7/7)!');
+console.log('✅ ALL UPI TRANSACTION IMPORTER TESTS PASSED (8/8)!');
 console.log('====================================================\n');
