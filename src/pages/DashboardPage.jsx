@@ -233,7 +233,7 @@ export default function DashboardPage({ onOpenAddTxn, onSelectTxn, onNavigateTab
           </div>
           <div>
             <div style={{ fontWeight: 800, fontSize: '0.875rem', color: 'var(--text-primary)' }}>Utility Usage</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Graphical utility meters</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Highest deduction sector</div>
           </div>
         </div>
 

@@ -213,7 +213,7 @@ function MainApp() {
         )}
 
         {currentTab === 'analytics' && (
-          <AnalyticsPage />
+          <AnalyticsPage onOpenAddTxn={handleOpenAddTxn} />
         )}
 
         {currentTab === 'ai-chat' && (
