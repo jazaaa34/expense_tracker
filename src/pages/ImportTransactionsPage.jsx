@@ -471,12 +471,9 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
           </div>
 
           <div>
-            <h2 style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>
-              {isParsing ? 'Parsing Statement Rows...' : 'Click or Drag & Drop Any Statement / Receipt File'}
+            <h2 style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+              {isParsing ? 'Parsing Statement Rows...' : 'Click or Drag & Drop Any Statement'}
             </h2>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', maxWidth: '460px', margin: '0 auto', lineHeight: 1.5 }}>
-              Upload bank statements or payment receipts in <strong>any format</strong> — CSV, Excel (XLSX/XLS), PDF, TXT, or Photos/Screenshots (PNG/JPG). Automated UTR, payee, and date extraction.
-            </p>
           </div>
 
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '6px' }}>
@@ -488,9 +485,6 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
             </span>
             <span style={{ fontSize: '0.6875rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: 'var(--surface-muted)', color: 'var(--text-secondary)' }}>
               📑 PDF Statements
-            </span>
-            <span style={{ fontSize: '0.6875rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: 'var(--surface-muted)', color: 'var(--text-secondary)' }}>
-              📸 Receipts & Screenshots
             </span>
             <span style={{ fontSize: '0.6875rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: '#ECFDF5', color: '#047857' }}>
               🔒 100% In-Memory Processing
