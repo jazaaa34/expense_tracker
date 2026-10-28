@@ -1,4 +1,5 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
@@ -44,8 +45,8 @@
       "destination": "/api/db/user/find"
     },
     {
-      "source": "/api/db/(.*)",
-      "destination": "/api/db/$1"
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
     },
     {
       "source": "/(.*)",

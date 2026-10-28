@@ -12,8 +12,9 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Fallback file-based database path
-const LOCAL_DB_DIR = path.join(__dirname, '..', 'data');
+// Fallback file-based database path (isolated to local development only)
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NOW_REGION);
+const LOCAL_DB_DIR = isServerless ? '/tmp' : path.join(__dirname, '..', 'data');
 const LOCAL_DB_FILE = path.join(LOCAL_DB_DIR, 'db.json');
 
 let mongoClient = null;
@@ -21,17 +22,14 @@ let mongoDb = null;
 let isConnected = false;
 let clientPromise = null;
 
-// Ensure local db directory exists
+// Ensure local db directory exists (no-op in serverless)
 function ensureLocalDb() {
-  if (!fs.existsSync(LOCAL_DB_DIR)) {
-    try {
+  if (isServerless) return;
+  try {
+    if (!fs.existsSync(LOCAL_DB_DIR)) {
       fs.mkdirSync(LOCAL_DB_DIR, { recursive: true });
-    } catch (e) {
-      // ignore
     }
-  }
-  if (!fs.existsSync(LOCAL_DB_FILE)) {
-    try {
+    if (!fs.existsSync(LOCAL_DB_FILE)) {
       fs.writeFileSync(
         LOCAL_DB_FILE,
         JSON.stringify({
@@ -41,28 +39,36 @@ function ensureLocalDb() {
         }, null, 2),
         'utf8'
       );
-    } catch (e) {
-      // ignore
     }
+  } catch {
+    // Ignore filesystem limitations
   }
 }
 
 function readLocalDb() {
-  ensureLocalDb();
-  try {
-    const raw = fs.readFileSync(LOCAL_DB_FILE, 'utf8');
-    return JSON.parse(raw);
-  } catch {
+  if (isServerless) {
     return { users: {}, user_data: {}, otps: {} };
   }
+  ensureLocalDb();
+  try {
+    if (fs.existsSync(LOCAL_DB_FILE)) {
+      const raw = fs.readFileSync(LOCAL_DB_FILE, 'utf8');
+      return JSON.parse(raw);
+    }
+  } catch {
+    // Return empty store on read error
+  }
+  return { users: {}, user_data: {}, otps: {} };
 }
 
 function writeLocalDb(data) {
-  ensureLocalDb();
+  // Never attempt to write local disk files in cloud serverless environment
+  if (isServerless) return;
   try {
+    ensureLocalDb();
     fs.writeFileSync(LOCAL_DB_FILE, JSON.stringify(data, null, 2), 'utf8');
-  } catch (e) {
-    console.error('Failed to write local database file:', e.message);
+  } catch {
+    // Silent in cloud environments
   }
 }
 
@@ -303,23 +309,25 @@ export async function saveOtp(email, otp, name = '') {
     verifiedAt: 0
   });
 
-  // 3. Local persistent store for standalone local development
-  try {
-    const db = readLocalDb();
-    if (!db.otps) db.otps = {};
-    db.otps[cleanEmail] = {
-      email: cleanEmail,
-      otp: cleanOtp,
-      name: name ? name.trim() : '',
-      createdAt: Date.now(),
-      expiresAt: expiresAt.getTime(),
-      attempts: 0,
-      verified: false,
-      verifiedAt: 0
-    };
-    writeLocalDb(db);
-  } catch (localErr) {
-    // local fallback write notice
+  // 3. Local persistent store for standalone local development only
+  if (!isServerless && !mongoSaved) {
+    try {
+      const db = readLocalDb();
+      if (!db.otps) db.otps = {};
+      db.otps[cleanEmail] = {
+        email: cleanEmail,
+        otp: cleanOtp,
+        name: name ? name.trim() : '',
+        createdAt: Date.now(),
+        expiresAt: expiresAt.getTime(),
+        attempts: 0,
+        verified: false,
+        verifiedAt: 0
+      };
+      writeLocalDb(db);
+    } catch {
+      // local fallback write notice
+    }
   }
 
   // If MongoDB is configured but failed to save, report failure so we don't dispatch an unsaved OTP
@@ -580,4 +588,16 @@ export async function syncUserData(email, incomingData) {
   db.user_data[cleanEmail] = incomingData;
   writeLocalDb(db);
   return { success: true, storage: 'local', updatedAt: now.getTime() };
+}
+
+export default async function handler(req, res) {
+  const health = await checkDatabaseHealth();
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'no-store');
+  return res.end(JSON.stringify({
+    success: true,
+    service: 'WalletWeather Database Module',
+    ...health
+  }));
 }

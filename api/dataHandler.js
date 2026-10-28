@@ -168,3 +168,7 @@ export async function handleDataApi(req, res, explicitAction = null) {
     error: `Data route not found: ${pathname}`
   });
 }
+
+export default async function handler(req, res) {
+  return handleDataApi(req, res);
+}
