@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Modal from '../common/Modal';
-import { PAYMENT_METHODS, formatINR } from '../../services/storageService';
+import { PAYMENT_METHODS, formatINR, isExpenseTxn } from '../../services/storageService';
 import confetti from 'canvas-confetti';
 import {
   Camera,
@@ -65,7 +65,7 @@ export default function TransactionModal({ isOpen, onClose, onSave, editingTxn }
 
   useEffect(() => {
     if (editingTxn) {
-      setIsExpense(editingTxn.isExpense);
+      setIsExpense(isExpenseTxn(editingTxn));
       setAmount(editingTxn.amount.toString());
       setName(editingTxn.name);
       setPaymentMethod(editingTxn.paymentMethod || 'UPI');

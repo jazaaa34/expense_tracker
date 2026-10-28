@@ -7,7 +7,9 @@ import {
   DEFAULT_BUDGETS, 
   DEFAULT_ALERTS, 
   DEFAULT_GOALS,
-  formatINR
+  formatINR,
+  isExpenseTxn,
+  isIncomeTxn
 } from '../services/storageService';
 import { useAuth } from './AuthContext';
 import { apiRequest } from '../services/apiClient';
@@ -312,19 +314,19 @@ export function WalletProvider({ children }) {
   // Financial Computations
   const income = useMemo(() => {
     return transactions
-      .filter(t => !t.isExpense)
+      .filter(isIncomeTxn)
       .reduce((sum, t) => sum + Number(t.amount || 0), 0);
   }, [transactions]);
 
   const expense = useMemo(() => {
     return transactions
-      .filter(t => t.isExpense)
+      .filter(isExpenseTxn)
       .reduce((sum, t) => sum + Number(t.amount || 0), 0);
   }, [transactions]);
 
   const billExpense = useMemo(() => {
     return transactions
-      .filter(t => t.isExpense && (t.source === 'bill' || Boolean(t.screenshot)))
+      .filter(t => isExpenseTxn(t) && (t.source === 'bill' || Boolean(t.screenshot)))
       .reduce((sum, t) => sum + Number(t.amount || 0), 0);
   }, [transactions]);
 
@@ -541,12 +543,13 @@ export function WalletProvider({ children }) {
 
   // Actions
   const addTransaction = (t) => {
+    const isExp = isExpenseTxn(t);
     const newTxn = {
       id: t.id || Date.now().toString(),
-      name: t.name || 'Unnamed',
-      category: t.category || 'Other Expense',
+      name: t.name || (isExp ? 'Unnamed Expense' : 'Income Entry'),
+      category: t.category || (isExp ? 'Other Expense' : 'Salary'),
       amount: parseFloat(t.amount) || 0,
-      isExpense: t.isExpense !== undefined ? t.isExpense : true,
+      isExpense: isExp,
       date: t.date || new Date().toISOString(),
       paymentMethod: t.paymentMethod || 'UPI',
       note: t.note || '',
@@ -585,8 +588,11 @@ export function WalletProvider({ children }) {
   };
 
   const updateTransaction = (updatedTxn) => {
+    const isExp = isExpenseTxn(updatedTxn);
     const stamp = {
       ...updatedTxn,
+      isExpense: isExp,
+      amount: parseFloat(updatedTxn.amount) || 0,
       updatedAt: new Date().toISOString()
     };
     const currentTxns = stateRef.current.transactions || transactions;
@@ -719,6 +725,38 @@ export function WalletProvider({ children }) {
     syncAlerts([newAlert, ...currentAlerts]);
   };
 
+  // Wipes all data clean to start completely fresh from ₹0 balance & 0 history
+  const resetAllToZero = async () => {
+    const email = user?.email?.toLowerCase().trim() || 'guest';
+    storageService.setUserData(email, 'deleted_txn_ids', []);
+    syncTransactions([]);
+    syncBudgets({});
+    syncAlerts([]);
+    syncGoals([]);
+    syncSavedAmount(0);
+    syncAiQuestions([]);
+
+    const nowTime = Date.now();
+    const payload = {
+      transactions: [],
+      budgets: {},
+      goals: [],
+      alerts: [],
+      utilityCaps: {},
+      savedAmount: 0,
+      lastModified: nowTime
+    };
+    storageService.setUserData(email, 'last_local_update', nowTime);
+    try {
+      await apiRequest('/api/db/sync', {
+        method: 'POST',
+        body: JSON.stringify({ email, data: payload })
+      });
+    } catch (err) {
+      console.warn('[MongoDB] Sync reset error:', err.message);
+    }
+  };
+
   return (
     <WalletContext.Provider value={{
       isLoaded,
@@ -756,7 +794,8 @@ export function WalletProvider({ children }) {
       addAiQuestion,
       deleteAiQuestion,
       clearAiQuestions,
-      resetToDefaultData
+      resetToDefaultData,
+      resetAllToZero
     }}>
       {children}
     </WalletContext.Provider>

@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useWallet } from '../context/WalletContext';
 import { formatINR } from '../services/storageService';
 import TransactionTile from '../components/transactions/TransactionTile';
+import Modal from '../components/common/Modal';
 import { 
   ArrowDownLeft, 
   ArrowUpRight, 
   Sparkles, 
   ShieldAlert, 
   Zap,
-  Receipt
+  Receipt,
+  RotateCcw
 } from 'lucide-react';
 
 export default function DashboardPage({ onOpenAddTxn, onSelectTxn, onNavigateTab }) {
@@ -17,37 +19,64 @@ export default function DashboardPage({ onOpenAddTxn, onSelectTxn, onNavigateTab
     income, 
     expense, 
     billExpense = 0,
-    transactions
+    transactions,
+    resetAllToZero
   } = useWallet();
 
-  const netIncome = Math.max(0, income - billExpense);
+  const [isResetZeroModalOpen, setIsResetZeroModalOpen] = useState(false);
+  const isDeficit = balance < 0;
   const recentTxns = transactions.slice(0, 5);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Top Hero Balance Card */}
       <div className="hero-card" style={{ padding: '32px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' }}>
             Net Available Balance
           </div>
-          <span style={{
-            padding: '4px 10px',
-            borderRadius: 'var(--radius-full)',
-            backgroundColor: 'rgba(255,255,255,0.12)',
-            fontSize: '0.6875rem',
-            fontWeight: 700,
-            color: '#FFFFFF'
-          }}>
-            Live Account
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{
+              padding: '4px 10px',
+              borderRadius: 'var(--radius-full)',
+              backgroundColor: isDeficit ? 'rgba(239, 68, 68, 0.35)' : 'rgba(255,255,255,0.12)',
+              border: isDeficit ? '1px solid rgba(239, 68, 68, 0.5)' : 'none',
+              fontSize: '0.6875rem',
+              fontWeight: 800,
+              color: isDeficit ? '#FCA5A5' : '#FFFFFF'
+            }}>
+              {isDeficit ? '⚠️ Deficit / Overdrawn' : 'Live Account'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsResetZeroModalOpen(true)}
+              title="Reset everything and start clean from zero"
+              style={{
+                padding: '4px 10px',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: 'rgba(255,255,255,0.15)',
+                border: '1px solid rgba(255,255,255,0.25)',
+                color: '#FFFFFF',
+                fontSize: '0.6875rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <RotateCcw size={11} />
+              <span>Reset to 0</span>
+            </button>
+          </div>
         </div>
 
         <div style={{
           fontSize: '3rem',
           fontWeight: 900,
           letterSpacing: '-0.04em',
-          color: '#FFFFFF',
+          color: isDeficit ? '#FCA5A5' : '#FFFFFF',
           marginBottom: '24px'
         }}>
           {formatINR(balance)}
@@ -81,13 +110,8 @@ export default function DashboardPage({ onOpenAddTxn, onSelectTxn, onNavigateTab
                 Total Income
               </div>
               <div style={{ fontSize: '1.125rem', fontWeight: 900, color: '#FFFFFF' }}>
-                {formatINR(netIncome)}
+                {formatINR(income)}
               </div>
-              {billExpense > 0 && (
-                <div style={{ fontSize: '0.6875rem', color: 'rgba(255,255,255,0.75)', marginTop: '2px' }}>
-                  (-{formatINR(billExpense)} bills deducted)
-                </div>
-              )}
             </div>
           </div>
 
@@ -227,6 +251,56 @@ export default function DashboardPage({ onOpenAddTxn, onSelectTxn, onNavigateTab
           </div>
         </div>
       </div>
+
+      {/* Reset to Zero Confirmation Modal */}
+      <Modal
+        isOpen={isResetZeroModalOpen}
+        onClose={() => setIsResetZeroModalOpen(false)}
+        title="Start Fresh from ₹0?"
+        maxWidth="420px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            This will clear all transactions, bills, and history so you can start with a <strong>fresh ₹0 balance</strong> and enter your own real data from scratch.
+          </p>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={() => setIsResetZeroModalOpen(false)}
+              style={{
+                flex: 1,
+                height: '44px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--surface-muted)',
+                border: '1px solid var(--border-light)',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                await resetAllToZero();
+                setIsResetZeroModalOpen(false);
+              }}
+              style={{
+                flex: 1,
+                height: '44px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--expense-red)',
+                color: '#FFFFFF',
+                border: 'none',
+                fontWeight: 800,
+                cursor: 'pointer'
+              }}
+            >
+              Yes, Reset to ₹0
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

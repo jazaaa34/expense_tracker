@@ -71,6 +71,16 @@ export function getCategoryMeta(name, isExpense = true) {
   return isExpense ? EXPENSE_CATEGORIES[EXPENSE_CATEGORIES.length - 1] : INCOME_CATEGORIES[INCOME_CATEGORIES.length - 1];
 }
 
+export function isExpenseTxn(t) {
+  if (!t) return true;
+  if (t.isExpense === false || t.isExpense === 'false' || t.isExpense === 0 || t.type === 'income') return false;
+  return true;
+}
+
+export function isIncomeTxn(t) {
+  return !isExpenseTxn(t);
+}
+
 // Indian Rupee Currency Formatter
 export function formatINR(val) {
   if (val === undefined || val === null || isNaN(val)) return '₹0';

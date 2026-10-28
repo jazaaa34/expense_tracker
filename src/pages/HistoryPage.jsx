@@ -1,17 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import { useWallet } from '../context/WalletContext';
 import { exportService } from '../services/exportService';
-import { formatINR, EXPENSE_CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS } from '../services/storageService';
+import { formatINR, EXPENSE_CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, isIncomeTxn, isExpenseTxn } from '../services/storageService';
 import TransactionTile from '../components/transactions/TransactionTile';
 import EmptyState from '../components/common/EmptyState';
-import { Search, Download, Filter, Plus, Calendar } from 'lucide-react';
+import { Search, Download, Filter, Plus, Calendar, RotateCcw, AlertTriangle } from 'lucide-react';
 
 export default function HistoryPage({ onSelectTxn, onOpenAddTxn, onOpenScanBill, initialQuery = '' }) {
-  const { transactions } = useWallet();
+  const { transactions, resetAllToZero } = useWallet();
   const [search, setSearch] = useState(initialQuery);
   const [filterType, setFilterType] = useState('all'); // 'all', 'expense', 'income', 'bills'
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedMethod, setSelectedMethod] = useState('all');
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
   const billCount = useMemo(() => {
     return transactions.filter(t => t.source === 'bill' || Boolean(t.screenshot)).length;
@@ -20,8 +21,8 @@ export default function HistoryPage({ onSelectTxn, onOpenAddTxn, onOpenScanBill,
   const filteredTxns = useMemo(() => {
     return transactions.filter(t => {
       // Type Filter
-      if (filterType === 'expense' && !t.isExpense) return false;
-      if (filterType === 'income' && t.isExpense) return false;
+      if (filterType === 'expense' && !isExpenseTxn(t)) return false;
+      if (filterType === 'income' && !isIncomeTxn(t)) return false;
       if (filterType === 'bills' && !(t.source === 'bill' || Boolean(t.screenshot))) return false;
 
       // Category Filter
@@ -60,7 +61,7 @@ export default function HistoryPage({ onSelectTxn, onOpenAddTxn, onOpenScanBill,
   const allCategories = [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES];
 
   const totalFilteredSum = useMemo(() => {
-    return filteredTxns.reduce((sum, t) => sum + (t.isExpense ? -t.amount : t.amount), 0);
+    return filteredTxns.reduce((sum, t) => sum + (isExpenseTxn(t) ? -t.amount : t.amount), 0);
   }, [filteredTxns]);
 
   return (
@@ -76,7 +77,7 @@ export default function HistoryPage({ onSelectTxn, onOpenAddTxn, onOpenScanBill,
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button
             onClick={() => exportService.exportToCsv(transactions)}
             style={{
@@ -95,6 +96,27 @@ export default function HistoryPage({ onSelectTxn, onOpenAddTxn, onOpenScanBill,
           >
             <Download size={16} />
             <span>Export CSV</span>
+          </button>
+
+          <button
+            onClick={() => setIsResetModalOpen(true)}
+            title="Wipe transactions and start from zero"
+            style={{
+              padding: '9px 14px',
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: '#FEE2E2',
+              color: '#DC2626',
+              border: '1.2px solid #FECACA',
+              fontWeight: 700,
+              fontSize: '0.8125rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            <RotateCcw size={15} />
+            <span>Reset to 0</span>
           </button>
 
           <button
@@ -276,6 +298,98 @@ export default function HistoryPage({ onSelectTxn, onOpenAddTxn, onOpenScanBill,
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Reset Confirmation Modal */}
+      {isResetModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '16px',
+            maxWidth: '440px',
+            width: '100%',
+            padding: '24px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '12px',
+                backgroundColor: '#FEE2E2',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#DC2626'
+              }}>
+                <AlertTriangle size={22} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                  Reset Everything to ₹0?
+                </h3>
+                <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                  Start fresh with zero history
+                </span>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.875rem', color: '#475569', lineHeight: 1.5, margin: '0 0 20px 0' }}>
+              This will permanently delete all transactions, scanned bills, budgets, and goals, resetting your balance and income to <strong>₹0.00</strong>. This action also syncs to MongoDB Atlas cloud.
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setIsResetModalOpen(false)}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: '10px',
+                  border: '1.2px solid #E2E8F0',
+                  backgroundColor: '#FFFFFF',
+                  color: '#475569',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  resetAllToZero();
+                  setIsResetModalOpen(false);
+                }}
+                style={{
+                  padding: '9px 18px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  backgroundColor: '#DC2626',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  fontSize: '0.875rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Yes, Reset Everything
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

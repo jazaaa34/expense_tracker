@@ -9,7 +9,8 @@ import { User, RotateCcw, Download, Database, Edit2, ShieldAlert, CheckCircle2, 
 
 export default function ProfilePage() {
   const { user, updateProfile } = useAuth();
-  const { budgets, setBudget, transactions, resetToDefaultData } = useWallet();
+  const { budgets, setBudget, transactions, resetToDefaultData, resetAllToZero } = useWallet();
+  const [resetMode, setResetMode] = useState('zero'); // 'zero' or 'demo'
 
   const [isEditNameOpen, setIsEditNameOpen] = useState(false);
   const [nameInput, setNameInput] = useState(user?.name || (user?.email === 'jazaaa34@gmail.com' ? 'Aysha' : ''));
@@ -314,7 +315,7 @@ export default function ProfilePage() {
           </button>
         </div>
 
-        {/* Reset Data */}
+        {/* Reset Data to Zero (Start Fresh) */}
         <div style={{
           padding: '16px',
           borderRadius: '14px',
@@ -322,30 +323,60 @@ export default function ProfilePage() {
           backgroundColor: 'var(--expense-light)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between'
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <RotateCcw size={20} color="var(--expense-red)" />
             <div>
-              <div style={{ fontWeight: 800, fontSize: '0.875rem', color: 'var(--expense-red)' }}>Restore Default Demo Data</div>
+              <div style={{ fontWeight: 800, fontSize: '0.875rem', color: 'var(--expense-red)' }}>
+                Start Clean from Zero (₹0 Balance)
+              </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                Reset local storage to original seed transactions and budgets
+                Wipe all transactions, history, and details to start completely fresh from ₹0
               </div>
             </div>
           </div>
-          <button
-            onClick={() => setIsResetConfirmOpen(true)}
-            style={{
-              padding: '8px 14px',
-              borderRadius: '8px',
-              backgroundColor: 'var(--expense-red)',
-              color: '#FFFFFF',
-              fontWeight: 700,
-              fontSize: '0.8125rem'
-            }}
-          >
-            Reset
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => {
+                setResetMode('zero');
+                setIsResetConfirmOpen(true);
+              }}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--expense-red)',
+                color: '#FFFFFF',
+                fontWeight: 800,
+                fontSize: '0.8125rem',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              Reset to ₹0
+            </button>
+            <button
+              onClick={() => {
+                setResetMode('demo');
+                setIsResetConfirmOpen(true);
+              }}
+              style={{
+                padding: '8px 12px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--surface-muted)',
+                border: '1px solid var(--border-light)',
+                color: 'var(--text-secondary)',
+                fontWeight: 700,
+                fontSize: '0.75rem',
+                cursor: 'pointer'
+              }}
+              title="Restore demo transactions and sample budgets"
+            >
+              Restore Demo
+            </button>
+          </div>
         </div>
       </div>
 
@@ -397,12 +428,14 @@ export default function ProfilePage() {
       <Modal
         isOpen={isResetConfirmOpen}
         onClose={() => setIsResetConfirmOpen(false)}
-        title="Reset All Local Data?"
+        title={resetMode === 'zero' ? "Start Fresh from ₹0?" : "Restore Demo Data?"}
         maxWidth="420px"
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            This will clear your local transactions and restore the default demo records (Salary, Rent, Swiggy, etc.).
+            {resetMode === 'zero'
+              ? 'This will clear all transactions, bills, and history so you start with a completely empty account and ₹0 balance.'
+              : 'This will restore sample demo records (Salary, Rent, Swiggy, etc.) into your account.'}
           </p>
           <div style={{ display: 'flex', gap: '10px' }}>
             <button
@@ -412,14 +445,20 @@ export default function ProfilePage() {
                 height: '44px',
                 borderRadius: 'var(--radius-md)',
                 backgroundColor: 'var(--surface-muted)',
-                fontWeight: 700
+                fontWeight: 700,
+                border: '1px solid var(--border-light)',
+                cursor: 'pointer'
               }}
             >
               Cancel
             </button>
             <button
-              onClick={() => {
-                resetToDefaultData();
+              onClick={async () => {
+                if (resetMode === 'zero') {
+                  await resetAllToZero();
+                } else {
+                  resetToDefaultData();
+                }
                 setIsResetConfirmOpen(false);
               }}
               style={{
@@ -428,10 +467,12 @@ export default function ProfilePage() {
                 borderRadius: 'var(--radius-md)',
                 backgroundColor: 'var(--expense-red)',
                 color: '#FFFFFF',
-                fontWeight: 800
+                fontWeight: 800,
+                border: 'none',
+                cursor: 'pointer'
               }}
             >
-              Reset Data
+              {resetMode === 'zero' ? 'Yes, Reset to ₹0' : 'Restore Demo'}
             </button>
           </div>
         </div>
