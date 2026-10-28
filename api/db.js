@@ -16,11 +16,10 @@ const __dirname = path.dirname(__filename);
 const LOCAL_DB_DIR = path.join(__dirname, '..', 'data');
 const LOCAL_DB_FILE = path.join(LOCAL_DB_DIR, 'db.json');
 
-// In-memory cache when running locally or during connection
 let mongoClient = null;
 let mongoDb = null;
 let isConnected = false;
-let connectionAttempted = false;
+let clientPromise = null;
 
 // Ensure local db directory exists
 function ensureLocalDb() {
@@ -97,55 +96,70 @@ loadEnvSafely();
 export async function connectToDatabase(forceReconnect = false) {
   loadEnvSafely();
   const uri = (process.env.MONGODB_URI || '').trim();
-
-  if (!forceReconnect && isConnected && mongoDb) {
-    return { connected: true, db: mongoDb, type: 'mongodb' };
-  }
+  const dbName = (process.env.MONGODB_DB_NAME || 'walletweather').trim();
 
   if (!uri) {
     return { connected: false, type: 'local', reason: 'MONGODB_URI not configured in .env' };
   }
 
-  try {
-    if (forceReconnect && mongoClient) {
+  if (forceReconnect) {
+    if (mongoClient) {
+      try { await mongoClient.close(); } catch {}
+    }
+    mongoClient = null;
+    mongoDb = null;
+    clientPromise = null;
+    isConnected = false;
+  }
+
+  // If already connected, verify connection socket is alive with a fast ping
+  if (mongoClient && mongoDb && isConnected) {
+    try {
+      await mongoDb.command({ ping: 1 });
+      return { connected: true, db: mongoDb, client: mongoClient, type: 'mongodb' };
+    } catch {
+      // Idle socket closed by remote Atlas cluster, reset client
+      mongoClient = null;
+      mongoDb = null;
+      clientPromise = null;
+      isConnected = false;
+    }
+  }
+
+  if (!clientPromise) {
+    const client = new MongoClient(uri, {
+      serverSelectionTimeoutMS: 8000,
+      connectTimeoutMS: 8000,
+      maxPoolSize: 10
+    });
+
+    clientPromise = client.connect().then(async (c) => {
+      mongoClient = c;
+      mongoDb = c.db(dbName);
+      isConnected = true;
+
+      // Ensure TTL index on otps collection so expired codes are automatically purged
       try {
-        await mongoClient.close();
-      } catch {
-        // ignore
-      }
+        await mongoDb.collection('otps').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+      } catch {}
+
+      // Ensure index on email for high-speed queries
+      try {
+        await mongoDb.collection('otps').createIndex({ email: 1 });
+      } catch {}
+
+      return { connected: true, db: mongoDb, client: mongoClient, type: 'mongodb' };
+    }).catch(err => {
+      clientPromise = null;
       mongoClient = null;
       mongoDb = null;
       isConnected = false;
-    }
-
-    if (!mongoClient) {
-      mongoClient = new MongoClient(uri, {
-        serverSelectionTimeoutMS: 5000,
-        connectTimeoutMS: 5000
-      });
-    }
-
-    await mongoClient.connect();
-    // Default db name walletweather if not specified in URI
-    const dbName = (process.env.MONGODB_DB_NAME || 'walletweather').trim();
-    mongoDb = mongoClient.db(dbName);
-    isConnected = true;
-
-    // Create TTL index on otps collection so OTPs automatically expire after 10 minutes
-    try {
-      await mongoDb.collection('otps').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-    } catch (idxErr) {
-      // Index may already exist or user doesn't have createIndex permissions
-    }
-
-    console.log(`[MongoDB] Connected successfully to database: ${dbName}`);
-    return { connected: true, db: mongoDb, type: 'mongodb' };
-  } catch (err) {
-    console.warn(`[MongoDB] Connection warning (${err.message}). Using local persistent database.`);
-    isConnected = false;
-    mongoDb = null;
-    return { connected: false, type: 'local', error: err.message };
+      console.warn(`[MongoDB] Connection warning (${err.message}). Using local persistent database.`);
+      return { connected: false, type: 'local', error: err.message };
+    });
   }
+
+  return clientPromise;
 }
 
 /**
@@ -237,26 +251,59 @@ export function isDbConnected() {
 
 // ==============================================================================
 // OTP OPERATIONS
-// Active OTP memory store & recent verification cache for fast lookup and race-condition prevention
+// Active OTP memory store for fast local lookup
 const activeOtps = new Map();
-const recentlyVerified = new Map(); // email -> { timestamp, otp }
 
 export async function saveOtp(email, otp, name = '') {
-  const cleanEmail = (email || '').toLowerCase().trim();
-  const cleanOtp = String(otp || '').trim();
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins validity
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const cleanOtp = String(otp || '').replace(/\D/g, '').trim();
 
-  // 1. In-memory cache (instant lookup)
+  if (!cleanEmail || !cleanOtp) {
+    return { success: false, error: 'Email and 6-digit verification code are required.' };
+  }
+
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins validity
+  let mongoSaved = false;
+
+  // 1. Primary Store: MongoDB Atlas otps collection
+  try {
+    const conn = await connectToDatabase();
+    if (conn.connected && conn.db) {
+      await conn.db.collection('otps').updateOne(
+        { email: cleanEmail },
+        {
+          $set: {
+            email: cleanEmail,
+            otp: cleanOtp,
+            name: name ? name.trim() : '',
+            createdAt: new Date(),
+            expiresAt,
+            attempts: 0,
+            verified: false,
+            verifiedAt: null
+          }
+        },
+        { upsert: true }
+      );
+      mongoSaved = true;
+    }
+  } catch (mongoErr) {
+    console.error('[MongoDB] Error saving OTP to database:', mongoErr.message);
+  }
+
+  // 2. In-memory cache for fast same-process lookup
   activeOtps.set(cleanEmail, {
     email: cleanEmail,
     otp: cleanOtp,
     name: name ? name.trim() : '',
     createdAt: Date.now(),
     expiresAt: expiresAt.getTime(),
-    attempts: 0
+    attempts: 0,
+    verified: false,
+    verifiedAt: 0
   });
 
-  // 2. Local persistent JSON store (data/db.json)
+  // 3. Local persistent store for standalone local development
   try {
     const db = readLocalDb();
     if (!db.otps) db.otps = {};
@@ -266,75 +313,63 @@ export async function saveOtp(email, otp, name = '') {
       name: name ? name.trim() : '',
       createdAt: Date.now(),
       expiresAt: expiresAt.getTime(),
-      attempts: 0
+      attempts: 0,
+      verified: false,
+      verifiedAt: 0
     };
     writeLocalDb(db);
   } catch (localErr) {
-    console.warn('[LocalDb] Failed saving OTP locally:', localErr.message);
+    // local fallback write notice
   }
 
-  // 3. MongoDB collection (remote store)
-  try {
-    const conn = await connectToDatabase();
-    if (conn.connected && mongoDb) {
-      await mongoDb.collection('otps').updateOne(
-        { email: cleanEmail },
-        {
-          $set: {
-            email: cleanEmail,
-            otp: cleanOtp,
-            name: name ? name.trim() : '',
-            createdAt: new Date(),
-            expiresAt,
-            attempts: 0
-          }
-        },
-        { upsert: true }
-      );
-    }
-  } catch (mongoErr) {
-    console.warn('[MongoDB] Failed saving OTP remotely:', mongoErr.message);
+  // If MongoDB is configured but failed to save, report failure so we don't dispatch an unsaved OTP
+  const uri = (process.env.MONGODB_URI || '').trim();
+  if (uri && !mongoSaved) {
+    return {
+      success: false,
+      error: 'Database connection failed. Please ensure MongoDB Atlas is accessible.'
+    };
   }
 
   return { success: true };
 }
 
 export async function verifyOtp(email, submittedOtp) {
-  const cleanEmail = (email || '').toLowerCase().trim();
+  const cleanEmail = (email || '').trim().toLowerCase();
   const cleanOtp = String(submittedOtp || '').replace(/\D/g, '').trim();
 
   if (!cleanEmail || !cleanOtp) {
     return { success: false, error: 'Email and 6-digit verification code are required.' };
   }
 
-  // 0. Double-submit protection: check if this exact email and OTP was verified within the last 2 minutes
-  const recent = recentlyVerified.get(cleanEmail);
-  if (recent && (Date.now() - recent.timestamp < 120000) && recent.otp === cleanOtp) {
-    return { success: true, verified: true, message: 'Email verified successfully.' };
-  }
+  let record = null;
 
-  // Multi-tier record lookup: Memory -> MongoDB -> Local JSON DB
-  let record = activeOtps.get(cleanEmail) || null;
-
-  if (!record) {
-    try {
-      const conn = await connectToDatabase();
-      if (conn.connected && mongoDb) {
-        const mongoRec = await mongoDb.collection('otps').findOne({ email: cleanEmail });
-        if (mongoRec) {
-          record = {
-            email: mongoRec.email,
-            otp: String(mongoRec.otp || '').trim(),
-            expiresAt: new Date(mongoRec.expiresAt).getTime(),
-            attempts: mongoRec.attempts || 0
-          };
-        }
+  // 1. Primary Lookup: MongoDB Atlas otps collection (shared across all Vercel Lambdas)
+  try {
+    const conn = await connectToDatabase();
+    if (conn.connected && conn.db) {
+      const mongoRec = await conn.db.collection('otps').findOne({ email: cleanEmail });
+      if (mongoRec) {
+        record = {
+          email: mongoRec.email,
+          otp: String(mongoRec.otp || '').trim(),
+          expiresAt: mongoRec.expiresAt instanceof Date ? mongoRec.expiresAt.getTime() : new Date(mongoRec.expiresAt).getTime(),
+          attempts: mongoRec.attempts || 0,
+          verified: Boolean(mongoRec.verified),
+          verifiedAt: mongoRec.verifiedAt ? new Date(mongoRec.verifiedAt).getTime() : 0
+        };
       }
-    } catch (e) {
-      console.warn('[MongoDB] Error finding OTP:', e.message);
     }
+  } catch (mongoErr) {
+    console.error('[MongoDB] Error finding OTP:', mongoErr.message);
   }
 
+  // 2. In-memory check (for fast single-process local server lookup)
+  if (!record && activeOtps.has(cleanEmail)) {
+    record = activeOtps.get(cleanEmail);
+  }
+
+  // 3. Local JSON check (standalone local file fallback)
   if (!record) {
     try {
       const db = readLocalDb();
@@ -342,7 +377,7 @@ export async function verifyOtp(email, submittedOtp) {
         record = db.otps[cleanEmail];
       }
     } catch (e) {
-      console.warn('[LocalDb] Error reading OTP:', e.message);
+      // local db read notice
     }
   }
 
@@ -351,71 +386,86 @@ export async function verifyOtp(email, submittedOtp) {
     return { success: false, error: 'No active verification code found for this email. Please request a new code.' };
   }
 
-  // Check expiration
+  // 0. Double-submit protection across Vercel serverless lambdas:
+  // If this code was already successfully verified within the last 3 minutes for this email
+  if (record.verified && record.otp === cleanOtp) {
+    const timeSinceVerified = Date.now() - (record.verifiedAt || 0);
+    if (timeSinceVerified < 180000) {
+      return { success: true, verified: true, message: 'Email verified successfully.' };
+    }
+  }
+
+  // Check expiration (15 minutes validity)
   const expTime = typeof record.expiresAt === 'number' ? record.expiresAt : new Date(record.expiresAt).getTime();
   if (Date.now() > expTime) {
     activeOtps.delete(cleanEmail);
     try {
-      const db = readLocalDb();
-      if (db.otps) { delete db.otps[cleanEmail]; writeLocalDb(db); }
-      if (mongoDb) await mongoDb.collection('otps').deleteOne({ email: cleanEmail });
+      const conn = await connectToDatabase();
+      if (conn.connected && conn.db) {
+        await conn.db.collection('otps').deleteOne({ email: cleanEmail });
+      }
     } catch {}
     return { success: false, error: 'Verification code has expired. Please request a new code.' };
   }
 
-  // Check attempt limit
+  // Check attempt limit (max 5 attempts)
   const attempts = (record.attempts || 0) + 1;
   record.attempts = attempts;
   if (attempts > 5) {
     activeOtps.delete(cleanEmail);
     try {
-      const db = readLocalDb();
-      if (db.otps) { delete db.otps[cleanEmail]; writeLocalDb(db); }
-      if (mongoDb) await mongoDb.collection('otps').deleteOne({ email: cleanEmail });
+      const conn = await connectToDatabase();
+      if (conn.connected && conn.db) {
+        await conn.db.collection('otps').deleteOne({ email: cleanEmail });
+      }
     } catch {}
     return { success: false, error: 'Too many incorrect attempts. Please request a fresh verification code.' };
   }
 
-  // Verify OTP matches
+  // Verify OTP digits match
   if (String(record.otp || '').trim() !== cleanOtp) {
-    // Update attempts in all tiers
-    activeOtps.set(cleanEmail, record);
+    // Record incremented attempt count in MongoDB
     try {
-      const db = readLocalDb();
-      if (db.otps && db.otps[cleanEmail]) {
-        db.otps[cleanEmail].attempts = attempts;
-        writeLocalDb(db);
-      }
-      if (mongoDb) {
-        await mongoDb.collection('otps').updateOne({ email: cleanEmail }, { $set: { attempts } });
+      const conn = await connectToDatabase();
+      if (conn.connected && conn.db) {
+        await conn.db.collection('otps').updateOne({ email: cleanEmail }, { $set: { attempts } });
       }
     } catch {}
+    activeOtps.set(cleanEmail, record);
+
     const remaining = 5 - attempts;
-    return { success: false, error: `Incorrect verification code. ${remaining > 0 ? `${remaining} attempts remaining.` : 'Code expired.'}` };
+    return {
+      success: false,
+      error: `Incorrect verification code. ${remaining > 0 ? `${remaining} attempt${remaining === 1 ? '' : 's'} remaining.` : 'Code expired.'}`
+    };
   }
 
-  // Valid OTP! Cache in recentlyVerified for 2 minutes to guard against duplicate requests
-  recentlyVerified.set(cleanEmail, { timestamp: Date.now(), otp: cleanOtp });
-
-  // Cleanup old recentlyVerified items
-  for (const [k, v] of recentlyVerified.entries()) {
-    if (Date.now() - v.timestamp > 300000) recentlyVerified.delete(k);
-  }
-
-  // Remove from active stores
-  activeOtps.delete(cleanEmail);
+  // Valid OTP! Mark as verified in MongoDB Atlas (retained for 5 minutes for race-condition protection, then cleaned up by TTL)
+  const verifiedAt = new Date();
   try {
-    const db = readLocalDb();
-    if (db.otps && db.otps[cleanEmail]) {
-      delete db.otps[cleanEmail];
-      writeLocalDb(db);
-    }
-    if (mongoDb) {
-      await mongoDb.collection('otps').deleteOne({ email: cleanEmail });
+    const conn = await connectToDatabase();
+    if (conn.connected && conn.db) {
+      await conn.db.collection('otps').updateOne(
+        { email: cleanEmail },
+        {
+          $set: {
+            verified: true,
+            verifiedAt,
+            expiresAt: new Date(Date.now() + 5 * 60 * 1000)
+          }
+        }
+      );
     }
   } catch (cleanErr) {
-    console.warn('Error clearing verified OTP:', cleanErr.message);
+    console.error('Error marking OTP verified:', cleanErr.message);
   }
+
+  // Update in-memory record
+  activeOtps.set(cleanEmail, {
+    ...record,
+    verified: true,
+    verifiedAt: verifiedAt.getTime()
+  });
 
   return { success: true, verified: true };
 }
@@ -425,12 +475,12 @@ export async function verifyOtp(email, submittedOtp) {
 // ==============================================================================
 
 export async function findUserByEmail(email) {
-  const cleanEmail = email.toLowerCase().trim();
+  const cleanEmail = (email || '').trim().toLowerCase();
   const conn = await connectToDatabase();
 
-  if (conn.connected && mongoDb) {
+  if (conn.connected && conn.db) {
     try {
-      const user = await mongoDb.collection('users').findOne({ email: cleanEmail });
+      const user = await conn.db.collection('users').findOne({ email: cleanEmail });
       if (user) return user;
     } catch (e) {
       console.error('[MongoDB] Error finding user:', e.message);
@@ -442,7 +492,7 @@ export async function findUserByEmail(email) {
 }
 
 export async function saveUserAccount(userObj) {
-  const cleanEmail = userObj.email.toLowerCase().trim();
+  const cleanEmail = (userObj.email || '').trim().toLowerCase();
   const record = {
     ...userObj,
     email: cleanEmail,
@@ -450,14 +500,14 @@ export async function saveUserAccount(userObj) {
   };
 
   const conn = await connectToDatabase();
-  if (conn.connected && mongoDb) {
+  if (conn.connected && conn.db) {
     try {
-      await mongoDb.collection('users').updateOne(
+      await conn.db.collection('users').updateOne(
         { email: cleanEmail },
         { $set: record },
         { upsert: true }
       );
-      return { success: true };
+      return { success: true, storage: 'mongodb' };
     } catch (e) {
       console.error('[MongoDB] Error saving user:', e.message);
     }
@@ -467,7 +517,7 @@ export async function saveUserAccount(userObj) {
   if (!db.users) db.users = {};
   db.users[cleanEmail] = record;
   writeLocalDb(db);
-  return { success: true };
+  return { success: true, storage: 'local' };
 }
 
 // ==============================================================================
@@ -475,40 +525,51 @@ export async function saveUserAccount(userObj) {
 // ==============================================================================
 
 export async function getUserAllData(email) {
-  const cleanEmail = email.toLowerCase().trim();
+  const cleanEmail = (email || '').trim().toLowerCase();
   const conn = await connectToDatabase();
 
-  if (conn.connected && mongoDb) {
+  if (conn.connected && conn.db) {
     try {
-      const doc = await mongoDb.collection('user_data').findOne({ email: cleanEmail });
-      if (doc) return doc.data || {};
+      const doc = await conn.db.collection('user_data').findOne({ email: cleanEmail });
+      if (doc) {
+        return {
+          data: doc.data || {},
+          updatedAt: doc.updatedAt ? new Date(doc.updatedAt).getTime() : 0,
+          storage: 'mongodb'
+        };
+      }
     } catch (e) {
       console.error('[MongoDB] Error getting user data:', e.message);
     }
   }
 
   const db = readLocalDb();
-  return (db.user_data && db.user_data[cleanEmail]) || {};
+  return {
+    data: (db.user_data && db.user_data[cleanEmail]) || {},
+    updatedAt: 0,
+    storage: 'local'
+  };
 }
 
 export async function syncUserData(email, incomingData) {
-  const cleanEmail = email.toLowerCase().trim();
+  const cleanEmail = (email || '').trim().toLowerCase();
   const conn = await connectToDatabase();
+  const now = new Date();
 
-  if (conn.connected && mongoDb) {
+  if (conn.connected && conn.db) {
     try {
-      await mongoDb.collection('user_data').updateOne(
+      await conn.db.collection('user_data').updateOne(
         { email: cleanEmail },
         {
           $set: {
             email: cleanEmail,
             data: incomingData,
-            updatedAt: new Date()
+            updatedAt: now
           }
         },
         { upsert: true }
       );
-      return { success: true, storage: 'mongodb' };
+      return { success: true, storage: 'mongodb', updatedAt: now.getTime() };
     } catch (e) {
       console.error('[MongoDB] Error syncing user data:', e.message);
     }
@@ -518,5 +579,5 @@ export async function syncUserData(email, incomingData) {
   if (!db.user_data) db.user_data = {};
   db.user_data[cleanEmail] = incomingData;
   writeLocalDb(db);
-  return { success: true, storage: 'local' };
+  return { success: true, storage: 'local', updatedAt: now.getTime() };
 }

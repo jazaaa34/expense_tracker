@@ -132,7 +132,7 @@ function createEmailHtml(otp, name) {
 `;
 }
 
-export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa34@gmail.com', senderName = 'WalletWeather') {
+export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa34@gmail.com', senderName = 'WalletWeather', explicitAction = null) {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
@@ -142,13 +142,13 @@ export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa3
     return res.end();
   }
 
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const pathname = url.pathname;
+  const url = new URL(req.url || '/', `http://${req.headers?.host || 'localhost'}`);
+  const pathname = url.pathname.replace(/\/+$/, '');
 
-  const isSendOtp = pathname === '/api/auth/send-otp' || pathname === '/send-otp' || pathname.endsWith('/send-otp');
-  const isVerifyOtp = pathname === '/api/auth/verify-otp' || pathname === '/verify-otp' || pathname.endsWith('/verify-otp');
+  const isSendOtp = explicitAction === 'send' || pathname === '/api/auth/send-otp' || pathname === '/send-otp' || pathname.endsWith('/send-otp');
+  const isVerifyOtp = explicitAction === 'verify' || pathname === '/api/auth/verify-otp' || pathname === '/verify-otp' || pathname.endsWith('/verify-otp');
 
-  // 1. POST /api/auth/send-otp - Generate OTP and dispatch via Brevo
+  // 1. POST /api/auth/send-otp - Generate OTP, save to MongoDB Atlas, and dispatch via Brevo
   if (req.method === 'POST' && isSendOtp) {
     try {
       const body = await parseBody(req);
@@ -166,8 +166,14 @@ export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa3
       const otp = generateOtp();
       const token = generateVerificationToken(email, otp);
 
-      // Save OTP into database (MongoDB / persistent store)
-      await saveOtp(email, otp, name);
+      // Save OTP into MongoDB Atlas persistent store
+      const saveRes = await saveOtp(email, otp, name);
+      if (!saveRes.success) {
+        return sendJson(res, 500, {
+          success: false,
+          error: saveRes.error || 'Unable to save verification code. Please try again.'
+        });
+      }
 
       // Call Brevo transactional email endpoint if key is present
       if (brevoApiKey) {
@@ -196,21 +202,22 @@ export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa3
           if (!brevoRes.ok) {
             const errJson = await brevoRes.json().catch(() => ({}));
             const msg = errJson.message || `Brevo HTTP ${brevoRes.status}`;
-            console.error('Brevo API Error:', msg);
-            // Even if Brevo has delivery restrictions, return success with debug info in dev
-            return sendJson(res, 200, {
-              success: true,
-              message: `Verification code generated. (Email delivery notice: ${msg})`,
-              verificationToken: token,
-              expiresInSeconds: 600
+            console.error('Brevo API delivery issue:', msg);
+            return sendJson(res, 502, {
+              success: false,
+              error: `Email delivery issue: ${msg}. Please ensure your email address is correct.`
             });
           }
         } catch (mailErr) {
           console.error('Email dispatch error:', mailErr.message);
+          return sendJson(res, 502, {
+            success: false,
+            error: 'Failed to contact email delivery service. Please try again in a few moments.'
+          });
         }
       }
 
-      console.log(`[OTP] Generated verification code for ${email}: ${otp}`);
+      console.log(`[OTP] Verification code generated and saved for email: ${email}`);
 
       return sendJson(res, 200, {
         success: true,
@@ -219,7 +226,7 @@ export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa3
         expiresInSeconds: 600
       });
     } catch (e) {
-      console.error('Error handling send-otp:', e);
+      console.error('Error handling send-otp:', e.message);
       return sendJson(res, 500, {
         success: false,
         error: `Server error sending verification code: ${e.message}`
@@ -227,7 +234,7 @@ export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa3
     }
   }
 
-  // 2. POST /api/auth/verify-otp - Verify user submitted OTP
+  // 2. POST /api/auth/verify-otp - Verify user submitted OTP against MongoDB Atlas
   if (req.method === 'POST' && isVerifyOtp) {
     try {
       const body = await parseBody(req);
@@ -242,7 +249,7 @@ export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa3
         });
       }
 
-      // 1. Verify OTP from database (MongoDB / memory / persistent store)
+      // 1. Verify OTP from MongoDB Atlas persistent store
       const verifyResult = await verifyOtp(email, userOtp);
 
       if (verifyResult.success) {
@@ -256,7 +263,6 @@ export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa3
       // 2. Cryptographic token fallback (stateless serverless resilience across separate lambdas)
       const submittedToken = body.verificationToken || body.token || '';
       if (submittedToken && verifyVerificationToken(email, userOtp, submittedToken)) {
-        console.log(`[OTP] Verified ${email} via cryptographic token verification`);
         return sendJson(res, 200, {
           success: true,
           verified: true,
@@ -269,6 +275,7 @@ export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa3
         error: verifyResult.error || 'Incorrect verification code.'
       });
     } catch (e) {
+      console.error('Error handling verify-otp:', e.message);
       return sendJson(res, 500, {
         success: false,
         error: `Server error verifying code: ${e.message}`

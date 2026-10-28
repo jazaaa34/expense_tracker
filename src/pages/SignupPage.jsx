@@ -44,6 +44,8 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = name.trim();
+    setEmail(cleanEmail);
+    setName(cleanName);
 
     if (!cleanName) {
       setError('Please enter your full name.');

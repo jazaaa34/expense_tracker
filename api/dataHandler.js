@@ -47,7 +47,7 @@ function parseBody(req) {
   });
 }
 
-export async function handleDataApi(req, res) {
+export async function handleDataApi(req, res, explicitAction = null) {
   // CORS preflight
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
@@ -57,11 +57,16 @@ export async function handleDataApi(req, res) {
     return res.end();
   }
 
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const pathname = url.pathname;
+  const url = new URL(req.url || '/', `http://${req.headers?.host || 'localhost'}`);
+  const pathname = url.pathname.replace(/\/+$/, '');
+
+  const isStatus = explicitAction === 'status' || pathname === '/api/db/status' || pathname.endsWith('/status');
+  const isSync = explicitAction === 'sync' || pathname === '/api/db/sync' || pathname.endsWith('/sync');
+  const isUserSave = explicitAction === 'user_save' || pathname === '/api/db/user/save' || pathname.endsWith('/user/save');
+  const isUserFind = explicitAction === 'user_find' || pathname === '/api/db/user/find' || pathname.endsWith('/user/find');
 
   // 1. GET /api/db/status - Safe database health check with real MongoDB ping
-  if (req.method === 'GET' && (pathname === '/api/db/status' || pathname.endsWith('/status'))) {
+  if (req.method === 'GET' && isStatus) {
     const health = await checkDatabaseHealth();
     return sendJson(res, 200, {
       success: true,
@@ -70,7 +75,7 @@ export async function handleDataApi(req, res) {
   }
 
   // 2. POST /api/db/sync - Push or pull user data to/from MongoDB
-  if (req.method === 'POST' && (pathname === '/api/db/sync' || pathname.endsWith('/sync'))) {
+  if (req.method === 'POST' && isSync) {
     try {
       const body = await parseBody(req);
       const email = (body.email || '').toLowerCase().trim();
@@ -88,7 +93,8 @@ export async function handleDataApi(req, res) {
         return sendJson(res, 200, {
           success: true,
           synced: true,
-          storage: result.storage
+          storage: result.storage,
+          updatedAt: result.updatedAt
         });
       }
 
@@ -96,7 +102,9 @@ export async function handleDataApi(req, res) {
       const existingData = await getUserAllData(email);
       return sendJson(res, 200, {
         success: true,
-        data: existingData || {}
+        data: existingData.data || {},
+        updatedAt: existingData.updatedAt || 0,
+        storage: existingData.storage
       });
     } catch (e) {
       return sendJson(res, 500, {
@@ -106,8 +114,8 @@ export async function handleDataApi(req, res) {
     }
   }
 
-  // 3. POST /api/db/user/auth - Verify or create user in MongoDB
-  if (req.method === 'POST' && (pathname === '/api/db/user/save' || pathname.endsWith('/user/save'))) {
+  // 3. POST /api/db/user/save - Verify or create user in MongoDB
+  if (req.method === 'POST' && isUserSave) {
     try {
       const body = await parseBody(req);
       const email = (body.email || '').toLowerCase().trim();
@@ -129,7 +137,7 @@ export async function handleDataApi(req, res) {
   }
 
   // 4. POST /api/db/user/find - Look up user in MongoDB
-  if (req.method === 'POST' && (pathname === '/api/db/user/find' || pathname.endsWith('/user/find'))) {
+  if (req.method === 'POST' && isUserFind) {
     try {
       const body = await parseBody(req);
       const email = (body.email || '').toLowerCase().trim();
