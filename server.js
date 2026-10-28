@@ -1,17 +1,15 @@
 // ==============================================================================
 // PRODUCTION SERVER - WALLETWEATHER WEB
 // Built-in Node.js HTTP server (zero external dependencies required)
-// Serves static assets from dist/ and handles /api/chat securely with GROQ_API_KEY
+// Serves static assets from dist/ and routes /api requests through consolidated handler
 // ==============================================================================
 
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { handleGroqApi, DEFAULT_GROQ_MODEL } from './api/groqHandler.js';
-import { handleOtpApi } from './api/otpHandler.js';
-import { handleBillExtractApi } from './api/billExtractHandler.js';
-import { handleDataApi } from './api/dataHandler.js';
+import handleServerlessApi from './api/index.js';
+import { DEFAULT_GROQ_MODEL } from './lib/groqHandler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,28 +53,9 @@ const MIME_TYPES = {
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
-  // Handle Backend API endpoints
-  if (url.pathname === '/api/bills/extract') {
-    const geminiKey = process.env.GEMINI_API_KEY || '';
-    const anthropicKey = process.env.ANTHROPIC_API_KEY || '';
-    return handleBillExtractApi(req, res, { geminiKey, anthropicKey });
-  }
-
-  if (url.pathname.startsWith('/api/auth/')) {
-    const brevoKey = process.env.BREVO_API_KEY || '';
-    const senderEmail = process.env.BREVO_SENDER_EMAIL || 'jazaaa34@gmail.com';
-    const senderName = process.env.BREVO_SENDER_NAME || 'WalletWeather';
-    return handleOtpApi(req, res, brevoKey, senderEmail, senderName);
-  }
-
-  if (url.pathname.startsWith('/api/db/')) {
-    return handleDataApi(req, res);
-  }
-
-  if (url.pathname.startsWith('/api/')) {
-    const apiKey = process.env.GROQ_API_KEY || '';
-    const model = process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL;
-    return handleGroqApi(req, res, apiKey, model);
+  // Route any /api requests into consolidated serverless handler
+  if (url.pathname.startsWith('/api')) {
+    return handleServerlessApi(req, res);
   }
 
   // Handle static files from dist/

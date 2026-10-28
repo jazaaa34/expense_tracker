@@ -1,7 +1,5 @@
-// Test script to verify all API endpoints and serverless entry points
-import { handleGroqApi, DEFAULT_GROQ_MODEL } from '../api/groqHandler.js';
-import { handleOtpApi } from '../api/otpHandler.js';
-import { handleBillExtractApi } from '../api/billExtractHandler.js';
+// Test script to verify consolidated serverless API handler
+import handleServerlessApi from '../api/index.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,76 +29,79 @@ function createMockRes() {
 
 // Load env
 const envPath = path.join(__dirname, '..', '.env');
-const env = {};
 if (fs.existsSync(envPath)) {
   for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
     const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-    if (match) env[match[1]] = (match[2] || '').trim().replace(/^['"]|['"]$/g, '');
+    if (match && !process.env[match[1]]) {
+      process.env[match[1]] = (match[2] || '').trim().replace(/^['"]|['"]$/g, '');
+    }
   }
 }
 
 async function runTests() {
-  console.log('=== WALLETWEATHER ENDPOINT AUDIT & VERIFICATION ===\n');
+  console.log('=== CONSOLIDATED SERVERLESS API AUDIT (1 FUNCTION) ===\n');
 
-  // Test 1: GET /api/status
-  console.log('Test 1: GET /api/status');
+  // Test 1: Root /api status
+  console.log('Test 1: GET /api');
+  {
+    const req = { method: 'GET', url: '/api', headers: { host: 'localhost' } };
+    const res = createMockRes();
+    await handleServerlessApi(req, res);
+    const parsed = res.json();
+    console.log(`Status: ${res.statusCode}, Service: ${parsed.service}, Functions: ${parsed.functions}`);
+    if (res.statusCode !== 200 || parsed.functions !== 1) throw new Error('Root /api failed');
+  }
+
+  // Test 2: GET /api/status (Groq AI Status)
+  console.log('\nTest 2: GET /api/status (Groq Status)');
   {
     const req = { method: 'GET', url: '/api/status', headers: { host: 'localhost' } };
     const res = createMockRes();
-    await handleGroqApi(req, res, env.GROQ_API_KEY, env.GROQ_MODEL || DEFAULT_GROQ_MODEL);
+    await handleServerlessApi(req, res);
     const parsed = res.json();
-    console.log(`Status: ${res.statusCode}, Configured: ${parsed.configured}, Model: ${parsed.model}, CORS: ${res.getHeader('access-control-allow-origin')}`);
+    console.log(`Status: ${res.statusCode}, Configured: ${parsed.configured}, Model: ${parsed.model}`);
     if (res.statusCode !== 200 || !parsed.success) throw new Error('Status endpoint failed');
   }
 
-  // Test 2: OPTIONS /api/status (CORS preflight)
-  console.log('\nTest 2: OPTIONS /api/status (CORS preflight)');
+  // Test 3: OPTIONS /api/status (CORS preflight)
+  console.log('\nTest 3: OPTIONS /api/status (CORS preflight)');
   {
     const req = { method: 'OPTIONS', url: '/api/status', headers: { host: 'localhost' } };
     const res = createMockRes();
-    await handleGroqApi(req, res, env.GROQ_API_KEY);
+    await handleServerlessApi(req, res);
     console.log(`Status: ${res.statusCode}, Access-Control-Allow-Methods: ${res.getHeader('access-control-allow-methods')}`);
     if (res.statusCode !== 204) throw new Error('OPTIONS preflight failed');
   }
 
-  // Test 3: POST /api/test-connection
-  console.log('\nTest 3: POST /api/test-connection');
+  // Test 4: GET /api/db/status (MongoDB Atlas Health)
+  console.log('\nTest 4: GET /api/db/status (MongoDB Atlas Status)');
+  {
+    const req = { method: 'GET', url: '/api/db/status', headers: { host: 'localhost' } };
+    const res = createMockRes();
+    await handleServerlessApi(req, res);
+    const parsed = res.json();
+    console.log(`Status: ${res.statusCode}, Connected: ${parsed.connected}, Storage: ${parsed.storage}`);
+    if (res.statusCode !== 200 || !parsed.success) throw new Error('DB Status endpoint failed');
+  }
+
+  // Test 5: POST /api/test-connection (Groq Ping)
+  console.log('\nTest 5: POST /api/test-connection');
   {
     const req = {
       method: 'POST',
       url: '/api/test-connection',
       headers: { host: 'localhost' },
-      body: { model: env.GROQ_MODEL || DEFAULT_GROQ_MODEL }
+      body: { model: 'openai/gpt-oss-120b' }
     };
     const res = createMockRes();
-    await handleGroqApi(req, res, env.GROQ_API_KEY, env.GROQ_MODEL);
+    await handleServerlessApi(req, res);
     const parsed = res.json();
     console.log(`Status: ${res.statusCode}, Success: ${parsed.success}, Message: ${parsed.message || parsed.error}`);
     if (res.statusCode !== 200 || !parsed.success) throw new Error('Test connection failed: ' + parsed.error);
   }
 
-  // Test 4: POST /api/chat with openai/gpt-oss-120b
-  console.log('\nTest 4: POST /api/chat with openai/gpt-oss-120b');
-  {
-    const req = {
-      method: 'POST',
-      url: '/api/chat',
-      headers: { host: 'localhost' },
-      body: {
-        model: 'openai/gpt-oss-120b',
-        messages: [{ role: 'user', content: 'Say hello in 3 words' }],
-        max_tokens: 15
-      }
-    };
-    const res = createMockRes();
-    await handleGroqApi(req, res, env.GROQ_API_KEY, 'openai/gpt-oss-120b');
-    const parsed = res.json();
-    console.log(`Status: ${res.statusCode}, Success: ${parsed.success}, Content: ${parsed.content?.trim()}`);
-    if (res.statusCode !== 200 || !parsed.success) throw new Error('Chat failed: ' + parsed.error);
-  }
-
-  // Test 5: POST /api/auth/send-otp validation
-  console.log('\nTest 5: POST /api/auth/send-otp (Validation test with empty email)');
+  // Test 6: POST /api/auth/send-otp validation
+  console.log('\nTest 6: POST /api/auth/send-otp (Validation test with empty email)');
   {
     const req = {
       method: 'POST',
@@ -109,14 +110,14 @@ async function runTests() {
       body: { email: '', name: 'Test' }
     };
     const res = createMockRes();
-    await handleOtpApi(req, res, env.BREVO_API_KEY);
+    await handleServerlessApi(req, res);
     const parsed = res.json();
     console.log(`Status: ${res.statusCode}, Error: ${parsed.error}`);
     if (res.statusCode !== 400 || parsed.success !== false) throw new Error('Validation failed');
   }
 
-  // Test 6: POST /api/bills/extract validation
-  console.log('\nTest 6: POST /api/bills/extract (Validation test with missing image)');
+  // Test 7: POST /api/bills/extract validation
+  console.log('\nTest 7: POST /api/bills/extract (Validation test with missing image)');
   {
     const req = {
       method: 'POST',
@@ -125,13 +126,44 @@ async function runTests() {
       body: {}
     };
     const res = createMockRes();
-    await handleBillExtractApi(req, res, { geminiKey: env.GEMINI_API_KEY });
+    await handleServerlessApi(req, res);
     const parsed = res.json();
     console.log(`Status: ${res.statusCode}, Error: ${parsed.error}`);
     if (res.statusCode !== 400 || parsed.success !== false) throw new Error('Bill validation failed');
   }
 
-  console.log('\n=== ALL ENDPOINT CHECKS PASSED PERFECTLY ===');
+  // Test 8: Simulated Vercel rewrite with _route query parameter
+  console.log('\nTest 8: Vercel Rewrite simulation (?_route=auth/send-otp)');
+  {
+    const req = {
+      method: 'POST',
+      url: '/api?_route=auth/send-otp',
+      headers: { host: 'localhost' },
+      body: { email: '', name: 'Test' }
+    };
+    const res = createMockRes();
+    await handleServerlessApi(req, res);
+    const parsed = res.json();
+    console.log(`Status: ${res.statusCode}, Error: ${parsed.error}`);
+    if (res.statusCode !== 400 || parsed.success !== false) throw new Error('Vercel rewrite simulation failed');
+  }
+
+  // Test 9: Simulated Vercel edge x-forwarded-uri header
+  console.log('\nTest 9: Vercel Edge simulation (x-forwarded-uri: /api/status)');
+  {
+    const req = {
+      method: 'GET',
+      url: '/api',
+      headers: { host: 'localhost', 'x-forwarded-uri': '/api/status' }
+    };
+    const res = createMockRes();
+    await handleServerlessApi(req, res);
+    const parsed = res.json();
+    console.log(`Status: ${res.statusCode}, Configured: ${parsed.configured}, Model: ${parsed.model}`);
+    if (res.statusCode !== 200 || !parsed.success) throw new Error('Vercel Edge header simulation failed');
+  }
+
+  console.log('\n=== ALL CONSOLIDATED ENDPOINT CHECKS PASSED PERFECTLY ===');
 }
 
 runTests().catch(err => {

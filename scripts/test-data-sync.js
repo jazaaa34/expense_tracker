@@ -27,7 +27,7 @@ if (fs.existsSync(envPath)) {
 
 async function run() {
   console.log('[Test] Importing db handlers...');
-  const { connectToDatabase, syncUserData, getUserAllData } = await import('../api/db.js');
+  const { connectToDatabase, syncUserData, getUserAllData } = await import('../lib/db.js');
 
   const conn = await connectToDatabase();
   console.log('[Test] MongoDB connected:', conn.connected, 'Storage:', conn.storage);

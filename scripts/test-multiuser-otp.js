@@ -4,8 +4,8 @@
 // and double-submit resilience.
 // ==============================================================================
 
-import { saveOtp, verifyOtp, connectToDatabase } from '../api/db.js';
-import { handleOtpApi } from '../api/otpHandler.js';
+import { saveOtp, verifyOtp, connectToDatabase } from '../lib/db.js';
+import { handleOtpApi } from '../lib/otpHandler.js';
 
 async function runTests() {
   console.log('--- Starting Multi-User OTP Verification Test ---');
