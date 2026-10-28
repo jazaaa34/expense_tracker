@@ -600,6 +600,34 @@ export function WalletProvider({ children }) {
     syncTransactions(updated);
   };
 
+  const importTransactions = (importedList) => {
+    if (!Array.isArray(importedList) || importedList.length === 0) return;
+    const currentTxns = stateRef.current.transactions || transactions;
+    const formatted = importedList.map((t, idx) => {
+      const isExp = isExpenseTxn(t);
+      return {
+        id: t.id || `txn_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
+        name: t.name || (isExp ? 'Imported Expense' : 'Imported Income'),
+        category: t.category || (isExp ? 'Other Expense' : 'Other Income'),
+        amount: parseFloat(t.amount) || 0,
+        isExpense: isExp,
+        date: t.date || new Date().toISOString(),
+        paymentMethod: t.paymentMethod || 'UPI',
+        note: t.note || (t.rawDescription ? `Statement: ${t.rawDescription}` : ''),
+        tag: t.tag || 'Personal',
+        isMonthly: Boolean(t.isMonthly),
+        source: 'import',
+        refId: t.refId || null,
+        merchant: t.merchant || null,
+        createdAt: new Date().toISOString()
+      };
+    });
+
+    const merged = [...formatted, ...currentTxns];
+    syncTransactions(merged);
+    scheduleDbPush(true);
+  };
+
   const deleteTransaction = (id) => {
     const currentTxns = stateRef.current.transactions || transactions;
     const updated = currentTxns.filter(t => t.id !== id);
@@ -795,7 +823,8 @@ export function WalletProvider({ children }) {
       deleteAiQuestion,
       clearAiQuestions,
       resetToDefaultData,
-      resetAllToZero
+      resetAllToZero,
+      importTransactions
     }}>
       {children}
     </WalletContext.Provider>

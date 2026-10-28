@@ -16,6 +16,7 @@ const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
 const AiChatPage = lazy(() => import('./pages/AiChatPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const BillsPage = lazy(() => import('./pages/BillsPage'));
+const ImportTransactionsPage = lazy(() => import('./pages/ImportTransactionsPage'));
 
 // Lazy load dialogs and heavy sheets
 const TransactionModal = lazy(() => import('./components/transactions/TransactionModal'));
@@ -206,6 +207,10 @@ function MainApp() {
             onOpenScanBill={() => setIsBillModalOpen(true)}
             onOpenAddTxn={handleOpenAddTxn}
           />
+        )}
+
+        {currentTab === 'import' && (
+          <ImportTransactionsPage onNavigateTab={setCurrentTab} />
         )}
 
         {(currentTab === 'alerts' || currentTab === 'forecast') && (

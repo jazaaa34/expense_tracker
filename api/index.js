@@ -8,6 +8,7 @@ import { handleGroqApi, DEFAULT_GROQ_MODEL } from '../lib/groqHandler.js';
 import { handleOtpApi } from '../lib/otpHandler.js';
 import { handleBillExtractApi } from '../lib/billExtractHandler.js';
 import { handleDataApi } from '../lib/dataHandler.js';
+import { handleStatementApi } from '../lib/statementHandler.js';
 
 /**
  * Resolves the logical request path from headers, query params, or req.url
@@ -122,7 +123,12 @@ export default async function handler(req, res) {
     return handleGroqApi(req, res, groqKey, groqModel);
   }
 
-  // E. Consolidated API Root Status Endpoint
+  // E. Statement Importer APIs (Parse CSV/XLSX/PDF, AI Categories, Confirm Import)
+  if (pathname.startsWith('/api/statements/')) {
+    return handleStatementApi(req, res, groqKey, groqModel);
+  }
+
+  // F. Consolidated API Root Status Endpoint
   if (pathname === '/api' || pathname === '') {
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');
@@ -141,12 +147,15 @@ export default async function handler(req, res) {
         '/api/db/status',
         '/api/db/sync',
         '/api/db/user/save',
-        '/api/db/user/find'
+        '/api/db/user/find',
+        '/api/statements/parse',
+        '/api/statements/ai-categories',
+        '/api/statements/confirm-import'
       ]
     }));
   }
 
-  // F. Fallback for unhandled /api/* routes
+  // G. Fallback for unhandled /api/* routes
   res.statusCode = 404;
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
