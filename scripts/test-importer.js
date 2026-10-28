@@ -159,13 +159,23 @@ console.log('  Passed: XLSX multi-column spreadsheet parsed into clean transacti
 // ------------------------------------------------------------------------------
 // TEST 7: PDF Statement & Password-Protected PDF Handling
 // ------------------------------------------------------------------------------
-console.log('Test 7: PDF statement error resilience');
-// Test empty buffer handling
+console.log('Test 7: PDF statement parsing and error resilience');
+// 1. Test empty buffer handling
 await assert.rejects(async () => {
   await parsePdfStatement(Buffer.from(''));
 }, /Empty PDF file/);
 
-console.log('  Passed: PDF error cases handled securely.\n');
+// 2. Test valid PDF parsing
+const samplePdf = Buffer.from(
+  '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> >>\nendobj\n4 0 obj\n<< /Length 73 >>\nstream\nBT\n/F1 12 Tf\n72 712 Td\n(24/10/2026 UPI/DR/430192837492/Swiggy 450.00) Tj\nET\nendstream\nendobj\nxref\n0 5\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000305 00000 n \ntrailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n428\n%%EOF'
+);
+const pdfResult = await parsePdfStatement(samplePdf);
+assert.strictEqual(pdfResult.success, true);
+assert.strictEqual(pdfResult.transactions.length, 1);
+assert.strictEqual(pdfResult.transactions[0].merchant, 'Swiggy');
+assert.strictEqual(pdfResult.transactions[0].amount, 450);
+
+console.log('  Passed: PDF statement parsed and error cases handled securely.\n');
 
 console.log('====================================================');
 console.log('✅ ALL UPI TRANSACTION IMPORTER TESTS PASSED (7/7)!');
