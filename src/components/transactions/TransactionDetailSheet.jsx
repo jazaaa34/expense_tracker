@@ -1,6 +1,16 @@
 import React, { useState, useRef } from 'react';
 import Modal from '../common/Modal';
-import * as Icons from 'lucide-react';
+import { 
+  Camera, 
+  CheckCircle2, 
+  ZoomIn, 
+  Eye, 
+  Download, 
+  UploadCloud, 
+  Trash2, 
+  Edit3 
+} from 'lucide-react';
+import { getCategoryIcon } from '../../utils/categoryIcons';
 import { getCategoryMeta, formatINR, formatDateTime } from '../../services/storageService';
 
 export default function TransactionDetailSheet({ txn, isOpen, onClose, onEdit, onDelete, onUpdate }) {
@@ -9,7 +19,7 @@ export default function TransactionDetailSheet({ txn, isOpen, onClose, onEdit, o
 
   if (!txn) return null;
   const meta = getCategoryMeta(txn.category, txn.isExpense);
-  const IconComp = Icons[meta.icon] || Icons.Tag;
+  const IconComp = getCategoryIcon(meta.icon);
 
   const handleUploadNewScreenshot = (file) => {
     if (!file) return;
@@ -171,7 +181,7 @@ export default function TransactionDetailSheet({ txn, isOpen, onClose, onEdit, o
           <div className="card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Icons.Camera size={18} color="var(--primary)" />
+                <Camera size={18} color="var(--primary)" />
                 <span style={{ fontSize: '0.875rem', fontWeight: 800, color: 'var(--text-primary)' }}>
                   Payment Screenshot / Receipt Photo
                 </span>
@@ -188,7 +198,7 @@ export default function TransactionDetailSheet({ txn, isOpen, onClose, onEdit, o
                   alignItems: 'center',
                   gap: '4px'
                 }}>
-                  <Icons.CheckCircle2 size={12} color="#10B981" />
+                  <CheckCircle2 size={12} color="#10B981" />
                   <span>Verified Bill OCR ({Math.round((txn.confidence || 0.95) * 100)}%)</span>
                 </span>
               ) : txn.screenshot ? (
@@ -203,7 +213,7 @@ export default function TransactionDetailSheet({ txn, isOpen, onClose, onEdit, o
                   alignItems: 'center',
                   gap: '4px'
                 }}>
-                  <Icons.CheckCircle2 size={12} />
+                  <CheckCircle2 size={12} />
                   <span>Proof Attached</span>
                 </span>
               ) : (
@@ -277,7 +287,7 @@ export default function TransactionDetailSheet({ txn, isOpen, onClose, onEdit, o
                       alignItems: 'center',
                       gap: '6px'
                     }}>
-                      <Icons.ZoomIn size={14} />
+                      <ZoomIn size={14} />
                       <span>Click to Enlarge Full Photo</span>
                     </div>
                   </div>
@@ -306,7 +316,7 @@ export default function TransactionDetailSheet({ txn, isOpen, onClose, onEdit, o
                         gap: '4px'
                       }}
                     >
-                      <Icons.Eye size={13} />
+                      <Eye size={13} />
                       <span>View Full</span>
                     </button>
                     <a
@@ -326,7 +336,7 @@ export default function TransactionDetailSheet({ txn, isOpen, onClose, onEdit, o
                         gap: '4px'
                       }}
                     >
-                      <Icons.Download size={13} />
+                      <Download size={13} />
                       <span>Download</span>
                     </a>
                     {onUpdate && (
@@ -384,7 +394,7 @@ export default function TransactionDetailSheet({ txn, isOpen, onClose, onEdit, o
                       flexShrink: 0
                     }}
                   >
-                    <Icons.UploadCloud size={14} />
+                    <UploadCloud size={14} />
                     <span>+ Add Photo</span>
                   </button>
                 )}
@@ -415,7 +425,7 @@ export default function TransactionDetailSheet({ txn, isOpen, onClose, onEdit, o
                 cursor: 'pointer'
               }}
             >
-              <Icons.Trash2 size={16} />
+              <Trash2 size={16} />
               <span>Delete</span>
             </button>
 
@@ -440,7 +450,7 @@ export default function TransactionDetailSheet({ txn, isOpen, onClose, onEdit, o
                 cursor: 'pointer'
               }}
             >
-              <Icons.Edit3 size={16} />
+              <Edit3 size={16} />
               <span>Edit Transaction</span>
             </button>
           </div>
@@ -496,7 +506,7 @@ export default function TransactionDetailSheet({ txn, isOpen, onClose, onEdit, o
                     gap: '6px'
                   }}
                 >
-                  <Icons.Download size={14} />
+                  <Download size={14} />
                   <span>Download Image</span>
                 </a>
                 <button

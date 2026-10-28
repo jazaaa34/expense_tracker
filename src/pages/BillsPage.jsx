@@ -3,7 +3,6 @@ import { useWallet } from '../context/WalletContext';
 import { formatINR, formatDate, formatDateTime, getCategoryMeta, EXPENSE_CATEGORIES } from '../services/storageService';
 import { exportService } from '../services/exportService';
 import Modal from '../components/common/Modal';
-import * as Icons from 'lucide-react';
 import { 
   Camera, 
   Sparkles, 

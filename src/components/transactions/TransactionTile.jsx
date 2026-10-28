@@ -1,11 +1,11 @@
 
 import React from 'react';
-import * as Icons from 'lucide-react';
 import { getCategoryMeta, formatINR, formatDate } from '../../services/storageService';
+import { getCategoryIcon } from '../../utils/categoryIcons';
 
 export default function TransactionTile({ txn, onClick }) {
   const meta = getCategoryMeta(txn.category, txn.isExpense);
-  const IconComponent = Icons[meta.icon] || Icons.Tag;
+  const IconComponent = getCategoryIcon(meta.icon);
   const isExp = txn.isExpense;
 
   return (

@@ -1,23 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WalletProvider, useWallet } from './context/WalletContext';
 import AppLayout from './components/layout/AppLayout';
-import IntroPage from './pages/IntroPage';
-import LoginPage from './pages/LoginPage';
-import SignupPage from './pages/SignupPage';
-import DashboardPage from './pages/DashboardPage';
-import HistoryPage from './pages/HistoryPage';
-import AlertsPage from './pages/AlertsPage';
-import AnalyticsPage from './pages/AnalyticsPage';
-import AiChatPage from './pages/AiChatPage';
-import ProfilePage from './pages/ProfilePage';
-import BillsPage from './pages/BillsPage';
-import TransactionModal from './components/transactions/TransactionModal';
-import TransactionDetailSheet from './components/transactions/TransactionDetailSheet';
-import ExitConfirmModal from './components/common/ExitConfirmModal';
-import BillUploadModal from './components/bills/BillUploadModal';
 import { formatINR } from './services/storageService';
 import { CheckCircle2, X } from 'lucide-react';
+
+// Dynamic imports with React lazy loading for optimal bundle splitting
+const IntroPage = lazy(() => import('./pages/IntroPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const SignupPage = lazy(() => import('./pages/SignupPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const HistoryPage = lazy(() => import('./pages/HistoryPage'));
+const AlertsPage = lazy(() => import('./pages/AlertsPage'));
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
+const AiChatPage = lazy(() => import('./pages/AiChatPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const BillsPage = lazy(() => import('./pages/BillsPage'));
+
+// Lazy load dialogs and heavy sheets
+const TransactionModal = lazy(() => import('./components/transactions/TransactionModal'));
+const TransactionDetailSheet = lazy(() => import('./components/transactions/TransactionDetailSheet'));
+const ExitConfirmModal = lazy(() => import('./components/common/ExitConfirmModal'));
+const BillUploadModal = lazy(() => import('./components/bills/BillUploadModal'));
+
+const PageLoader = () => (
+  <div style={{
+    minHeight: '360px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '32px'
+  }}>
+    <div style={{
+      width: '44px',
+      height: '44px',
+      borderRadius: '14px',
+      backgroundColor: 'var(--primary)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#FFFFFF',
+      marginBottom: '14px',
+      boxShadow: 'var(--shadow-sm)'
+    }} className="animate-breathe">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" />
+        <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" />
+      </svg>
+    </div>
+    <div style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+      Loading...
+    </div>
+  </div>
+);
 
 function MainApp() {
   const { isLoggedIn, isLoading, logout } = useAuth();
@@ -88,27 +124,27 @@ function MainApp() {
 
   // Not logged in -> Show Auth Gate (Intro / Login / Signup)
   if (!isLoggedIn) {
-    if (authView === 'login') {
-      return (
-        <LoginPage
-          onNavigateIntro={() => setAuthView('intro')}
-          onNavigateSignup={() => setAuthView('signup')}
-        />
-      );
-    }
-    if (authView === 'signup') {
-      return (
-        <SignupPage
-          onNavigateIntro={() => setAuthView('intro')}
-          onNavigateLogin={() => setAuthView('login')}
-        />
-      );
-    }
     return (
-      <IntroPage
-        onNavigateLogin={() => setAuthView('login')}
-        onNavigateSignup={() => setAuthView('signup')}
-      />
+      <Suspense fallback={<PageLoader />}>
+        {authView === 'login' && (
+          <LoginPage
+            onNavigateIntro={() => setAuthView('intro')}
+            onNavigateSignup={() => setAuthView('signup')}
+          />
+        )}
+        {authView === 'signup' && (
+          <SignupPage
+            onNavigateIntro={() => setAuthView('intro')}
+            onNavigateLogin={() => setAuthView('login')}
+          />
+        )}
+        {authView === 'intro' && (
+          <IntroPage
+            onNavigateLogin={() => setAuthView('login')}
+            onNavigateSignup={() => setAuthView('signup')}
+          />
+        )}
+      </Suspense>
     );
   }
 
@@ -146,97 +182,109 @@ function MainApp() {
         }
       }}
     >
-      {currentTab === 'dashboard' && (
-        <DashboardPage
-          onOpenAddTxn={handleOpenAddTxn}
-          onSelectTxn={setSelectedTxn}
-          onNavigateTab={setCurrentTab}
-        />
-      )}
+      <Suspense fallback={<PageLoader />}>
+        {currentTab === 'dashboard' && (
+          <DashboardPage
+            onOpenAddTxn={handleOpenAddTxn}
+            onSelectTxn={setSelectedTxn}
+            onNavigateTab={setCurrentTab}
+          />
+        )}
 
-      {currentTab === 'history' && (
-        <HistoryPage
-          onSelectTxn={setSelectedTxn}
-          onOpenAddTxn={handleOpenAddTxn}
-          onOpenScanBill={() => setIsBillModalOpen(true)}
-          initialQuery={searchQuery}
-        />
-      )}
+        {currentTab === 'history' && (
+          <HistoryPage
+            onSelectTxn={setSelectedTxn}
+            onOpenAddTxn={handleOpenAddTxn}
+            onOpenScanBill={() => setIsBillModalOpen(true)}
+            initialQuery={searchQuery}
+          />
+        )}
 
-      {currentTab === 'bills' && (
-        <BillsPage
-          onSelectTxn={setSelectedTxn}
-          onOpenScanBill={() => setIsBillModalOpen(true)}
-          onOpenAddTxn={handleOpenAddTxn}
-        />
-      )}
+        {currentTab === 'bills' && (
+          <BillsPage
+            onSelectTxn={setSelectedTxn}
+            onOpenScanBill={() => setIsBillModalOpen(true)}
+            onOpenAddTxn={handleOpenAddTxn}
+          />
+        )}
 
-      {(currentTab === 'alerts' || currentTab === 'forecast') && (
-        <AlertsPage />
-      )}
+        {(currentTab === 'alerts' || currentTab === 'forecast') && (
+          <AlertsPage />
+        )}
 
-      {currentTab === 'analytics' && (
-        <AnalyticsPage />
-      )}
+        {currentTab === 'analytics' && (
+          <AnalyticsPage />
+        )}
 
-      {currentTab === 'ai-chat' && (
-        <AiChatPage />
-      )}
+        {currentTab === 'ai-chat' && (
+          <AiChatPage />
+        )}
 
-      {currentTab === 'profile' && (
-        <ProfilePage />
-      )}
+        {currentTab === 'profile' && (
+          <ProfilePage />
+        )}
+      </Suspense>
 
-      {/* Global Modals */}
-      <TransactionModal
-        isOpen={isAddTxnOpen}
-        onClose={() => setIsAddTxnOpen(false)}
-        onSave={handleSaveTxn}
-        editingTxn={editingTxn}
-      />
+      {/* Global Modals loaded lazily */}
+      <Suspense fallback={null}>
+        {isAddTxnOpen && (
+          <TransactionModal
+            isOpen={isAddTxnOpen}
+            onClose={() => setIsAddTxnOpen(false)}
+            onSave={handleSaveTxn}
+            editingTxn={editingTxn}
+          />
+        )}
 
-      <BillUploadModal
-        isOpen={isBillModalOpen}
-        onClose={() => setIsBillModalOpen(false)}
-        onSaveExpense={(payload) => {
-          addTransaction(payload);
-          setToast({
-            type: 'success',
-            title: 'Bill Saved to History!',
-            message: `"${payload.name}" (${formatINR(payload.amount)}) has been recorded in your history & Bills Vault.`,
-            actionLabel: 'View in Bills Vault',
-            onAction: () => {
-              setCurrentTab('bills');
-              setToast(null);
-            }
-          });
-        }}
-        onFallbackManual={() => {
-          setIsBillModalOpen(false);
-          setIsAddTxnOpen(true);
-        }}
-      />
+        {isBillModalOpen && (
+          <BillUploadModal
+            isOpen={isBillModalOpen}
+            onClose={() => setIsBillModalOpen(false)}
+            onSaveExpense={(payload) => {
+              addTransaction(payload);
+              setToast({
+                type: 'success',
+                title: 'Bill Saved to History!',
+                message: `"${payload.name}" (${formatINR(payload.amount)}) has been recorded in your history & Bills Vault.`,
+                actionLabel: 'View in Bills Vault',
+                onAction: () => {
+                  setCurrentTab('bills');
+                  setToast(null);
+                }
+              });
+            }}
+            onFallbackManual={() => {
+              setIsBillModalOpen(false);
+              setIsAddTxnOpen(true);
+            }}
+          />
+        )}
 
-      <TransactionDetailSheet
-        txn={selectedTxn}
-        isOpen={Boolean(selectedTxn)}
-        onClose={() => setSelectedTxn(null)}
-        onEdit={handleEditTxn}
-        onDelete={deleteTransaction}
-        onUpdate={(updatedTxn) => {
-          updateTransaction(updatedTxn);
-          setSelectedTxn(updatedTxn);
-        }}
-      />
+        {Boolean(selectedTxn) && (
+          <TransactionDetailSheet
+            txn={selectedTxn}
+            isOpen={Boolean(selectedTxn)}
+            onClose={() => setSelectedTxn(null)}
+            onEdit={handleEditTxn}
+            onDelete={deleteTransaction}
+            onUpdate={(updatedTxn) => {
+              updateTransaction(updatedTxn);
+              setSelectedTxn(updatedTxn);
+            }}
+          />
+        )}
 
-      <ExitConfirmModal
-        isOpen={isExitModalOpen}
-        onClose={() => setIsExitModalOpen(false)}
-        onConfirm={() => {
-          setIsExitModalOpen(false);
-          logout();
-        }}
-      />
+        {isExitModalOpen && (
+          <ExitConfirmModal
+            isOpen={isExitModalOpen}
+            onClose={() => setIsExitModalOpen(false)}
+            onConfirm={() => {
+              setIsExitModalOpen(false);
+              logout();
+            }}
+          />
+        )}
+      </Suspense>
 
       {/* Floating Success Toast */}
       {toast && (

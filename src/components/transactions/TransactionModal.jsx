@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Modal from '../common/Modal';
-import * as Icons from 'lucide-react';
 import { PAYMENT_METHODS, formatINR } from '../../services/storageService';
 import confetti from 'canvas-confetti';
 
