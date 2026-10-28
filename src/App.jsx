@@ -214,7 +214,7 @@ function MainApp() {
         )}
 
         {(currentTab === 'alerts' || currentTab === 'forecast') && (
-          <AlertsPage />
+          <AlertsPage onNavigateTab={setCurrentTab} />
         )}
 
         {currentTab === 'analytics' && (

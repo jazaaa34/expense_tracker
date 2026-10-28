@@ -13,6 +13,11 @@ import {
 } from '../services/storageService';
 import { useAuth } from './AuthContext';
 import { apiRequest } from '../services/apiClient';
+import { 
+  detectDuplicatesInTransactions, 
+  detectPriceIncreasesInTransactions, 
+  buildUnifiedAlerts 
+} from '../utils/alertAnalyzer';
 
 const WalletContext = createContext();
 
@@ -625,6 +630,28 @@ export function WalletProvider({ children }) {
 
     const merged = [...formatted, ...currentTxns];
     syncTransactions(merged);
+
+    // Actively detect duplicates and constant payment increases for the imported batch
+    try {
+      const currentAlerts = stateRef.current.alerts || alerts;
+      const existingAlertIds = new Set(currentAlerts.map(a => String(a.id)));
+
+      // 1. Check for duplicates in merged transactions
+      const detectedDuplicates = detectDuplicatesInTransactions(merged)
+        .filter(d => !existingAlertIds.has(String(d.id)));
+
+      // 2. Check for constant/recurring payment increases
+      const detectedHikes = detectPriceIncreasesInTransactions(merged)
+        .filter(h => !existingAlertIds.has(String(h.id)));
+
+      const newBatchAlerts = [...detectedDuplicates, ...detectedHikes];
+      if (newBatchAlerts.length > 0) {
+        syncAlerts([...newBatchAlerts, ...currentAlerts]);
+      }
+    } catch (alertErr) {
+      console.warn('[AlertAnalyzer] Error analyzing batch alerts:', alertErr);
+    }
+
     scheduleDbPush(true);
   };
 
@@ -637,6 +664,20 @@ export function WalletProvider({ children }) {
       storageService.setUserData(email, 'deleted_txn_ids', [...deletedList, String(id)]);
     }
     syncTransactions(updated);
+
+    // Auto-resolve any alerts linked to this deleted transaction
+    try {
+      const currentAlerts = stateRef.current.alerts || alerts;
+      const updatedAlerts = currentAlerts.map(a => {
+        if (a.txnId === id || a.duplicateWithId === id || a.previousTxnId === id) {
+          return { ...a, isResolved: true, resolvedReason: 'Associated transaction was deleted' };
+        }
+        return a;
+      });
+      syncAlerts(updatedAlerts);
+    } catch (e) {
+      console.warn('[WalletContext] Error updating alerts after deletion:', e);
+    }
   };
 
   const addSavedAmount = (amount) => {
@@ -655,6 +696,20 @@ export function WalletProvider({ children }) {
     const currentAlerts = stateRef.current.alerts || alerts;
     const updated = currentAlerts.map(a => a.id === alertId ? { ...a, isResolved: true } : a);
     syncAlerts(updated);
+  };
+
+  const dismissAlert = (alertId) => {
+    const currentAlerts = stateRef.current.alerts || alerts;
+    const updated = currentAlerts.filter(a => a.id !== alertId);
+    syncAlerts(updated);
+  };
+
+  const refreshAlertsAnalysis = () => {
+    const currentTxns = stateRef.current.transactions || transactions;
+    const currentAlerts = stateRef.current.alerts || alerts;
+    const unified = buildUnifiedAlerts(currentTxns, currentAlerts);
+    syncAlerts(unified.allAlerts);
+    return unified;
   };
 
   const addGoal = (goal) => {
@@ -817,6 +872,8 @@ export function WalletProvider({ children }) {
       setUtilityCap,
       addAlert,
       resolveAlert,
+      dismissAlert,
+      refreshAlertsAnalysis,
       addGoal,
       addGoalSaving,
       addAiQuestion,

@@ -351,7 +351,25 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => onNavigateTab && onNavigateTab('alerts')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '8px',
+                backgroundColor: '#EF4444',
+                color: '#FFFFFF',
+                fontWeight: 700,
+                fontSize: '0.8125rem',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <span>Check Alerts</span>
+            </button>
             <button
               onClick={() => onNavigateTab && onNavigateTab('dashboard')}
               style={{
