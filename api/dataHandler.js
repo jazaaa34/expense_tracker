@@ -128,6 +128,33 @@ export async function handleDataApi(req, res) {
     }
   }
 
+  // 4. POST /api/db/user/find - Look up user in MongoDB
+  if (req.method === 'POST' && (pathname === '/api/db/user/find' || pathname.endsWith('/user/find'))) {
+    try {
+      const body = await parseBody(req);
+      const email = (body.email || '').toLowerCase().trim();
+      if (!email) {
+        return sendJson(res, 400, { success: false, error: 'Email required' });
+      }
+
+      const user = await findUserByEmail(email);
+      if (!user) {
+        return sendJson(res, 404, { success: false, error: 'User not found in database' });
+      }
+
+      return sendJson(res, 200, {
+        success: true,
+        user: {
+          email: user.email,
+          name: user.name,
+          password: user.password
+        }
+      });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
   return sendJson(res, 404, {
     success: false,
     error: `Data route not found: ${pathname}`

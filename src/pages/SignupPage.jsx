@@ -15,6 +15,7 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
 
   // OTP state
   const [otp, setOtp] = useState('');
+  const [verificationToken, setVerificationToken] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
@@ -80,6 +81,10 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
         throw new Error(data?.error || 'Failed to send verification email.');
       }
 
+      if (data?.verificationToken) {
+        setVerificationToken(data.verificationToken);
+      }
+
       setStep('otp');
       setResendCooldown(60);
       setInfoMessage(`We've sent a 6-digit verification code to ${cleanEmail}.`);
@@ -92,7 +97,7 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
 
   // Resend OTP
   const handleResendOtp = async () => {
-    if (resendCooldown > 0 || isSendingOtp) return;
+    if (isSendingOtp) return;
     setError('');
     setInfoMessage('');
     setIsSendingOtp(true);
@@ -105,6 +110,10 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
 
       if (!ok || !data?.success) {
         throw new Error(data?.error || 'Failed to resend code.');
+      }
+
+      if (data?.verificationToken) {
+        setVerificationToken(data.verificationToken);
       }
 
       setResendCooldown(60);
@@ -139,7 +148,8 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
         method: 'POST',
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
-          otp: cleanOtp
+          otp: cleanOtp,
+          verificationToken: verificationToken || undefined
         })
       });
 
@@ -233,7 +243,28 @@ export default function SignupPage({ onNavigateIntro, onNavigateLogin }) {
               textAlign: 'center',
               lineHeight: 1.4
             }}>
-              {error}
+              <div>{error}</div>
+              {step === 'otp' && (
+                <div style={{ marginTop: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={isSendingOtp}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--expense-red)',
+                      color: '#FFFFFF',
+                      fontSize: '0.75rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      border: 'none'
+                    }}
+                  >
+                    {isSendingOtp ? 'Sending...' : 'Request Fresh Code Now'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

@@ -65,6 +65,7 @@ export default defineConfig({
   plugins: [react(), backendApiPlugin()],
   server: {
     port: 5173,
-    host: true
+    host: true,
+    open: true
   }
 });

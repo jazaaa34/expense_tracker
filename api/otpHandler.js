@@ -4,7 +4,36 @@
 // Securely verifies user emails before account creation
 // ==============================================================================
 
+import crypto from 'node:crypto';
 import { saveOtp, verifyOtp } from './db.js';
+
+const OTP_SECRET = process.env.OTP_SECRET || 'walletweather-otp-secure-token-secret-2026';
+
+function generateVerificationToken(email, otp) {
+  const timestamp = Date.now();
+  const payload = `${email}:${otp}:${timestamp}`;
+  const hmac = crypto.createHmac('sha256', OTP_SECRET).update(payload).digest('hex');
+  return Buffer.from(`${payload}:${hmac}`).toString('base64');
+}
+
+function verifyVerificationToken(email, submittedOtp, token) {
+  if (!token) return false;
+  try {
+    const raw = Buffer.from(token, 'base64').toString('utf8');
+    const parts = raw.split(':');
+    if (parts.length !== 4) return false;
+    const [tokenEmail, tokenOtp, timestampStr, hmac] = parts;
+    if (tokenEmail.toLowerCase().trim() !== email.toLowerCase().trim()) return false;
+    if (tokenOtp.trim() !== submittedOtp.trim()) return false;
+    const timestamp = parseInt(timestampStr, 10);
+    // 15 minutes validity
+    if (Date.now() - timestamp > 15 * 60 * 1000) return false;
+    const expectedHmac = crypto.createHmac('sha256', OTP_SECRET).update(`${tokenEmail}:${tokenOtp}:${timestampStr}`).digest('hex');
+    return crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(expectedHmac));
+  } catch {
+    return false;
+  }
+}
 
 function sendJson(res, statusCode, data) {
   res.statusCode = statusCode;
@@ -135,6 +164,7 @@ export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa3
       }
 
       const otp = generateOtp();
+      const token = generateVerificationToken(email, otp);
 
       // Save OTP into database (MongoDB / persistent store)
       await saveOtp(email, otp, name);
@@ -171,6 +201,7 @@ export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa3
             return sendJson(res, 200, {
               success: true,
               message: `Verification code generated. (Email delivery notice: ${msg})`,
+              verificationToken: token,
               expiresInSeconds: 600
             });
           }
@@ -184,6 +215,7 @@ export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa3
       return sendJson(res, 200, {
         success: true,
         message: `Verification code sent successfully to ${email}.`,
+        verificationToken: token,
         expiresInSeconds: 600
       });
     } catch (e) {
@@ -210,20 +242,31 @@ export async function handleOtpApi(req, res, brevoApiKey, senderEmail = 'jazaaa3
         });
       }
 
-      // Verify OTP from database (MongoDB / persistent store)
+      // 1. Verify OTP from database (MongoDB / memory / persistent store)
       const verifyResult = await verifyOtp(email, userOtp);
 
-      if (!verifyResult.success) {
-        return sendJson(res, 400, {
-          success: false,
-          error: verifyResult.error || 'Incorrect verification code.'
+      if (verifyResult.success) {
+        return sendJson(res, 200, {
+          success: true,
+          verified: true,
+          message: 'Email verified successfully.'
         });
       }
 
-      return sendJson(res, 200, {
-        success: true,
-        verified: true,
-        message: 'Email verified successfully.'
+      // 2. Cryptographic token fallback (stateless serverless resilience across separate lambdas)
+      const submittedToken = body.verificationToken || body.token || '';
+      if (submittedToken && verifyVerificationToken(email, userOtp, submittedToken)) {
+        console.log(`[OTP] Verified ${email} via cryptographic token verification`);
+        return sendJson(res, 200, {
+          success: true,
+          verified: true,
+          message: 'Email verified successfully.'
+        });
+      }
+
+      return sendJson(res, 400, {
+        success: false,
+        error: verifyResult.error || 'Incorrect verification code.'
       });
     } catch (e) {
       return sendJson(res, 500, {

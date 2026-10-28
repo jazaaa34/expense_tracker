@@ -28,6 +28,26 @@
       "destination": "/api/test-connection"
     },
     {
+      "source": "/api/db/sync",
+      "destination": "/api/db/sync"
+    },
+    {
+      "source": "/api/db/status",
+      "destination": "/api/db/status"
+    },
+    {
+      "source": "/api/db/user/save",
+      "destination": "/api/db/user/save"
+    },
+    {
+      "source": "/api/db/user/find",
+      "destination": "/api/db/user/find"
+    },
+    {
+      "source": "/api/db/(.*)",
+      "destination": "/api/db/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

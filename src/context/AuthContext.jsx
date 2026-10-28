@@ -49,6 +49,27 @@ export function AuthProvider({ children }) {
       return { success: true };
     }
 
+    // Check MongoDB database for user account
+    try {
+      const { ok, data } = await apiRequest('/api/db/user/find', {
+        method: 'POST',
+        body: JSON.stringify({ email: cleanEmail })
+      });
+      if (ok && data?.user && data.user.password === password) {
+        users[cleanEmail] = { name: data.user.name, password: data.user.password };
+        storageService.set(STORAGE_KEYS.REGISTERED_USERS, users);
+        const userData = { email: cleanEmail, name: data.user.name || 'User', rememberMe };
+        setUser(userData);
+        if (rememberMe) {
+          storageService.set(STORAGE_KEYS.CURRENT_USER, userData);
+          setSavedSession(userData);
+        } else {
+          storageService.remove(STORAGE_KEYS.CURRENT_USER);
+        }
+        return { success: true };
+      }
+    } catch {}
+
     return { success: false, message: 'Invalid email or password.' };
   };
 

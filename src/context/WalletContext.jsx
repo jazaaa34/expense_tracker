@@ -75,35 +75,82 @@ export function WalletProvider({ children }) {
         method: 'POST',
         body: JSON.stringify({ email: user.email })
       }).then(({ ok, data }) => {
-        if (ok && data?.data && data.data.transactions && Array.isArray(data.data.transactions) && data.data.transactions.length > 0) {
-          const cloudTxns = [...data.data.transactions];
-          cloudTxns.sort((a, b) => new Date(b.date) - new Date(a.date));
-          setTransactions(cloudTxns);
-          storageService.setUserData(email, 'transactions', cloudTxns);
-          if (data.data.budgets) {
+        if (ok && data?.data) {
+          const cloudTxns = Array.isArray(data.data.transactions) ? data.data.transactions : [];
+          const currentLocal = storageService.getUserData(email, 'transactions', defaultTxns) || [];
+
+          // Smart merge: create a map of transaction id -> transaction so local txns are never erased
+          const txnMap = new Map();
+          for (const t of cloudTxns) {
+            if (t && t.id) txnMap.set(String(t.id), t);
+          }
+          for (const t of currentLocal) {
+            if (t && t.id && !txnMap.has(String(t.id))) {
+              txnMap.set(String(t.id), t);
+            }
+          }
+
+          const merged = Array.from(txnMap.values());
+          merged.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+          if (merged.length > 0) {
+            setTransactions(merged);
+            storageService.setUserData(email, 'transactions', merged);
+          }
+
+          if (data.data.budgets && Object.keys(data.data.budgets).length > 0) {
             setBudgets(data.data.budgets);
             storageService.setUserData(email, 'budgets', data.data.budgets);
           }
+          if (data.data.goals && Array.isArray(data.data.goals) && data.data.goals.length > 0) {
+            setGoals(data.data.goals);
+            storageService.setUserData(email, 'goals', data.data.goals);
+          }
+          if (data.data.alerts && Array.isArray(data.data.alerts) && data.data.alerts.length > 0) {
+            setAlerts(data.data.alerts);
+            storageService.setUserData(email, 'alerts', data.data.alerts);
+          }
+          if (typeof data.data.savedAmount === 'number') {
+            setSavedAmount(data.data.savedAmount);
+            storageService.setUserData(email, 'saved_amount', data.data.savedAmount);
+          }
+
+          // If local had transactions not yet in cloud, immediately sync merged back to MongoDB!
+          if (merged.length > cloudTxns.length) {
+            pushToDb({
+              transactions: merged,
+              budgets: data.data.budgets || bdgs,
+              goals: gls,
+              alerts: alrts,
+              utilityCaps: uCaps,
+              savedAmount: typeof data.data.savedAmount === 'number' ? data.data.savedAmount : saved
+            });
+          }
         }
-      }).catch(() => {
-        // Local fallback is already active
+      }).catch((err) => {
+        console.warn('[Sync] Pull error:', err.message);
       });
     }
   }, [user?.email]);
 
   // Push updates to MongoDB in background
-  const pushToDb = (dataToSync) => {
+  const pushToDb = async (dataToSync) => {
     if (!user?.email) return;
     const email = user.email.toLowerCase().trim();
-    apiRequest('/api/db/sync', {
-      method: 'POST',
-      body: JSON.stringify({
-        email,
-        data: dataToSync
-      })
-    }).catch(() => {
-      // Offline or local mode
-    });
+    try {
+      const res = await apiRequest('/api/db/sync', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          data: dataToSync
+        })
+      });
+      if (res.ok) {
+        console.log('[MongoDB] Synced user data successfully for', email);
+      }
+    } catch (err) {
+      console.warn('[MongoDB] Sync error:', err.message);
+    }
   };
 
   // Sync to local storage and MongoDB for the current user
