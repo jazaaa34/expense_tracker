@@ -123,9 +123,9 @@ export default async function handler(req, res) {
     return handleGroqApi(req, res, groqKey, groqModel);
   }
 
-  // E. Statement Importer APIs (Parse CSV/XLSX/PDF, AI Categories, Confirm Import)
+  // E. Statement Importer APIs (Parse CSV/XLSX/PDF/Images/All Files, AI Categories, Confirm Import)
   if (pathname.startsWith('/api/statements/')) {
-    return handleStatementApi(req, res, groqKey, groqModel);
+    return handleStatementApi(req, res, { groqKey, groqModel, geminiKey });
   }
 
   // F. Consolidated API Root Status Endpoint

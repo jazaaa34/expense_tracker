@@ -81,14 +81,9 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
     }
 
     const name = f.name.toLowerCase();
-    const isCsv = name.endsWith('.csv');
-    const isXlsx = name.endsWith('.xlsx') || name.endsWith('.xls');
-    const isPdf = name.endsWith('.pdf');
-
-    if (!isCsv && !isXlsx && !isPdf) {
-      setErrorMsg('Unsupported file type. Please upload a CSV, Excel (XLSX), or PDF bank statement.');
-      return;
-    }
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    const mime = (f.type || '').toLowerCase();
+    const fileType = ext || (mime.includes('pdf') ? 'pdf' : (mime.includes('csv') ? 'csv' : (mime.includes('image') ? 'png' : 'txt')));
 
     setFile(f);
     setIsParsing(true);
@@ -102,8 +97,6 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
       });
       reader.readAsDataURL(f);
       const base64Data = await base64Promise;
-
-      const fileType = isCsv ? 'csv' : (isXlsx ? 'xlsx' : 'pdf');
 
       const response = await apiRequest('/api/statements/parse', {
         method: 'POST',
@@ -422,7 +415,7 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
             type="file"
             ref={fileInputRef}
             onChange={handleFileInputChange}
-            accept=".csv, .xlsx, .xls, .pdf"
+            accept="*/*"
             style={{ display: 'none' }}
           />
 
@@ -445,22 +438,25 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
 
           <div>
             <h2 style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>
-              {isParsing ? 'Parsing Statement Rows...' : 'Click or Drag & Drop Bank Statement'}
+              {isParsing ? 'Parsing Statement Rows...' : 'Click or Drag & Drop Any Statement / Receipt File'}
             </h2>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', maxWidth: '420px', margin: '0 auto', lineHeight: 1.5 }}>
-              Upload your statement in <strong>CSV, Excel (.xlsx), or digital text PDF</strong> format (up to 4.5 MB). We extract UPI reference IDs, merchants, and dates automatically.
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', maxWidth: '460px', margin: '0 auto', lineHeight: 1.5 }}>
+              Upload bank statements or payment receipts in <strong>any format</strong> — CSV, Excel (XLSX/XLS), PDF, TXT, or Photos/Screenshots (PNG/JPG). Automated UTR, payee, and date extraction.
             </p>
           </div>
 
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '6px' }}>
             <span style={{ fontSize: '0.6875rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: 'var(--surface-muted)', color: 'var(--text-secondary)' }}>
-              📄 CSV
+              📄 CSV / TSV / TXT
             </span>
             <span style={{ fontSize: '0.6875rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: 'var(--surface-muted)', color: 'var(--text-secondary)' }}>
-              📊 Excel XLSX
+              📊 Excel (XLSX / XLS)
             </span>
             <span style={{ fontSize: '0.6875rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: 'var(--surface-muted)', color: 'var(--text-secondary)' }}>
-              📑 Text PDF
+              📑 PDF Statements
+            </span>
+            <span style={{ fontSize: '0.6875rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: 'var(--surface-muted)', color: 'var(--text-secondary)' }}>
+              📸 Receipts & Screenshots
             </span>
             <span style={{ fontSize: '0.6875rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: '#ECFDF5', color: '#047857' }}>
               🔒 100% In-Memory Processing
