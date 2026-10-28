@@ -19,6 +19,7 @@ import {
   FileCheck,
   X
 } from 'lucide-react';
+import { getCategoryIcon } from '../utils/categoryIcons';
 
 export default function BillsPage({ onSelectTxn, onOpenScanBill, onOpenAddTxn }) {
   const { transactions, deleteTransaction, addTransaction } = useWallet();
@@ -453,7 +454,7 @@ export default function BillsPage({ onSelectTxn, onOpenScanBill, onOpenAddTxn })
         }}>
           {filteredBills.map(bill => {
             const meta = getCategoryMeta(bill.category, true);
-            const IconComp = Icons[meta.icon] || Icons.Tag;
+            const IconComp = getCategoryIcon(meta.icon);
 
             return (
               <div

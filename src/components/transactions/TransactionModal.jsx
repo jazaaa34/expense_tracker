@@ -2,6 +2,27 @@ import React, { useState, useEffect, useRef } from 'react';
 import Modal from '../common/Modal';
 import { PAYMENT_METHODS, formatINR } from '../../services/storageService';
 import confetti from 'canvas-confetti';
+import {
+  Camera,
+  UploadCloud,
+  CheckCircle2,
+  Eye,
+  Trash2,
+  Sparkles,
+  Clock,
+  Download
+} from 'lucide-react';
+
+const Icons = {
+  Camera,
+  UploadCloud,
+  CheckCircle2,
+  Eye,
+  Trash2,
+  Sparkles,
+  Clock,
+  Download
+};
 
 // Smart auto-categorization based on payee/description
 const detectCategory = (payeeName, isExp) => {
