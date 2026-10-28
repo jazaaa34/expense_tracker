@@ -9,6 +9,9 @@
     "preview": "vite preview",
     "start": "node server.js"
   },
+  "allowScripts": {
+    "esbuild": true
+  },
   "dependencies": {
     "canvas-confetti": "^1.9.3",
     "lucide-react": "^0.468.0",
