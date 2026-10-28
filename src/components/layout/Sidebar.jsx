@@ -8,19 +8,16 @@ import {
   Sparkles, 
   ShieldAlert, 
   Zap, 
-  User, 
-  Plus,
   LogOut,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
 import { useAuth } from '../../context/AuthContext';
-import { formatINR } from '../../services/storageService';
 
-export default function Sidebar({ currentTab, onSelectTab, isExpanded, onToggleExpand, onOpenAddTxn }) {
-  const { user, balance, alerts, transactions = [] } = useWallet();
-  const { logout, requestLogout } = useAuth();
+export default function Sidebar({ currentTab, onSelectTab, isExpanded, onToggleExpand }) {
+  const { user, alerts, transactions = [] } = useWallet();
+  const { requestLogout } = useAuth();
   const pendingAlerts = alerts.filter(a => !a.isResolved).length;
   const billCount = transactions.filter(t => t.source === 'bill' || Boolean(t.screenshot)).length;
 
@@ -31,8 +28,7 @@ export default function Sidebar({ currentTab, onSelectTab, isExpanded, onToggleE
     { id: 'import', label: 'Import Statements', icon: FileSpreadsheet },
     { id: 'ai-chat', label: 'AI Advisor', icon: Sparkles },
     { id: 'alerts', label: 'Alerts', icon: ShieldAlert, alertCount: pendingAlerts },
-    { id: 'analytics', label: 'Utility Usage', icon: Zap },
-    { id: 'profile', label: 'Profile & Settings', icon: User }
+    { id: 'analytics', label: 'Utility Usage', icon: Zap }
   ];
 
   return (
@@ -107,31 +103,6 @@ export default function Sidebar({ currentTab, onSelectTab, isExpanded, onToggleE
           title={isExpanded ? 'Collapse Sidebar' : 'Expand Sidebar'}
         >
           {isExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-        </button>
-      </div>
-
-      {/* Add Transaction CTA */}
-      <div style={{ padding: isExpanded ? '16px 18px 8px' : '16px 12px 8px' }}>
-        <button
-          onClick={onOpenAddTxn}
-          style={{
-            width: '100%',
-            height: '46px',
-            borderRadius: '14px',
-            backgroundColor: 'var(--primary)',
-            color: '#FFFFFF',
-            fontWeight: 800,
-            fontSize: '0.875rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            boxShadow: '0 4px 14px rgba(45, 26, 18, 0.2)'
-          }}
-          title="Add New Transaction"
-        >
-          <Plus size={18} strokeWidth={2.5} />
-          {isExpanded && <span>Add Txn</span>}
         </button>
       </div>
 
@@ -213,23 +184,12 @@ export default function Sidebar({ currentTab, onSelectTab, isExpanded, onToggleE
         })}
       </nav>
 
-      {/* Mini Balance & Profile Footer */}
+      {/* Mini Profile Footer */}
       <div style={{
         padding: isExpanded ? '16px' : '14px 10px',
         borderTop: '1px solid var(--border-light)',
         backgroundColor: 'var(--surface-muted)'
       }}>
-        {isExpanded && (
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Live Available
-            </div>
-            <div style={{ fontSize: '1.125rem', fontWeight: 900, color: 'var(--primary)', letterSpacing: '-0.02em' }}>
-              {formatINR(balance)}
-            </div>
-          </div>
-        )}
-
         <div style={{
           display: 'flex',
           flexDirection: isExpanded ? 'row' : 'column',
