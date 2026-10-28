@@ -226,6 +226,52 @@ assert.strictEqual(fullResult.some(t => t.merchant === 'Zomato' || t.name.includ
 assert.strictEqual(fullResult.some(t => t.merchant === 'Uber' || t.name.includes('Uber')), true);
 console.log('  Passed: All transactions parsed cleanly from stacked PDF statement text.\n');
 
+// ------------------------------------------------------------------------------
+// TEST 10: Google Pay (GPay) Receipts and Statements Extraction
+// ------------------------------------------------------------------------------
+console.log('Test 10: Google Pay (GPay) statement & receipt parsing');
+const gpayReceiptSample = `Google Pay
+Paid to
+Swiggy
+₹340.00
+Completed
+25 Oct 2026, 1:15 pm
+UPI transaction ID: 430192837492
+Google transaction ID: CICAgICAgICA
+From: State Bank of India •••• 1234`;
+
+const gpayRes1 = parseStatementTextMultiStrategy(gpayReceiptSample);
+assert.strictEqual(gpayRes1.length, 1, 'Should extract 1 transaction from GPay receipt');
+assert.strictEqual(gpayRes1[0].merchant, 'Swiggy', 'Merchant must be Swiggy');
+assert.strictEqual(gpayRes1[0].amount, 340, 'Amount must be 340');
+assert.strictEqual(gpayRes1[0].isExpense, true, 'Paid to must be expense');
+assert.strictEqual(gpayRes1[0].refId, '430192837492', 'UPI ref must match');
+
+const gpayHistorySample = `Google Pay
+Transaction History
+
+Paid to Zomato
+₹450.00
+24 Oct 2026, 8:45 pm
+Completed
+UPI ref: 430192837493
+
+Received from Ramesh Kumar
+₹1,500.00
+23 Oct 2026, 11:20 am
+Completed
+UPI ref: 430192837494`;
+
+const gpayRes2 = parseStatementTextMultiStrategy(gpayHistorySample);
+assert.strictEqual(gpayRes2.length, 2, 'Should extract 2 transactions from GPay history');
+assert.strictEqual(gpayRes2[0].merchant, 'Zomato');
+assert.strictEqual(gpayRes2[0].amount, 450);
+assert.strictEqual(gpayRes2[0].isExpense, true);
+assert.strictEqual(gpayRes2[1].merchant, 'Ramesh Kumar');
+assert.strictEqual(gpayRes2[1].amount, 1500);
+assert.strictEqual(gpayRes2[1].isExpense, false, 'Received from must be income');
+console.log('  Passed: Google Pay (GPay) receipts and transaction histories extracted with 100% precision.\n');
+
 console.log('====================================================');
-console.log('✅ ALL UPI TRANSACTION IMPORTER TESTS PASSED (9/9)!');
+console.log('✅ ALL UPI TRANSACTION IMPORTER TESTS PASSED (10/10)!');
 console.log('====================================================\n');
