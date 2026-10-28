@@ -111,6 +111,20 @@ export default function AlertsPage({ onNavigateTab }) {
     setTimeout(() => setFeedbackMsg(''), 3000);
   };
 
+  // Keep all payments at once
+  const handleKeepAllAlerts = () => {
+    unresolvedDuplicates.forEach(d => resolveAlert(d.id));
+    unresolvedHikes.forEach(h => resolveAlert(h.id));
+    setFeedbackMsg('✓ Kept all payments. All alerts cleared.');
+    setTimeout(() => setFeedbackMsg(''), 4000);
+  };
+
+  const handleKeepAllDuplicates = () => {
+    unresolvedDuplicates.forEach(d => resolveAlert(d.id));
+    setFeedbackMsg(`✓ Kept all ${unresolvedDuplicates.length} payments.`);
+    setTimeout(() => setFeedbackMsg(''), 4000);
+  };
+
   // Quick refresh scan
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -154,27 +168,53 @@ export default function AlertsPage({ onNavigateTab }) {
           </p>
         </div>
 
-        <button
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '7px 14px',
-            borderRadius: '9px',
-            backgroundColor: '#FFFFFF',
-            border: '1px solid var(--border-light)',
-            color: 'var(--text-secondary)',
-            fontSize: '0.8125rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-            boxShadow: 'var(--shadow-xs)'
-          }}
-        >
-          <RefreshCw size={13} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
-          <span>{isRefreshing ? 'Checking...' : 'Re-check Now'}</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {totalActiveAlerts > 0 && (
+            <button
+              onClick={handleKeepAllAlerts}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '7px 14px',
+                borderRadius: '9px',
+                backgroundColor: '#ECFDF5',
+                border: '1.2px solid #A7F3D0',
+                color: '#065F46',
+                fontSize: '0.8125rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                boxShadow: 'var(--shadow-xs)'
+              }}
+              title="Keep all payments and dismiss all alerts"
+            >
+              <Check size={14} />
+              <span>Keep All</span>
+            </button>
+          )}
+
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 14px',
+              borderRadius: '9px',
+              backgroundColor: '#FFFFFF',
+              border: '1px solid var(--border-light)',
+              color: 'var(--text-secondary)',
+              fontSize: '0.8125rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: 'var(--shadow-xs)'
+            }}
+          >
+            <RefreshCw size={13} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+            <span>{isRefreshing ? 'Checking...' : 'Re-check Now'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Friendly Feedback Message */}
@@ -407,9 +447,32 @@ export default function AlertsPage({ onNavigateTab }) {
       {/* ========================================================================= */}
       {(activeTab === 'all' || activeTab === 'duplicates') && unresolvedDuplicates.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ fontSize: '0.875rem', fontWeight: 800, color: '#DC2626', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <AlertCircle size={16} />
-            <span>Double Payments Found ({unresolvedDuplicates.length})</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ fontSize: '0.875rem', fontWeight: 800, color: '#DC2626', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <AlertCircle size={16} />
+              <span>Double Payments Found ({unresolvedDuplicates.length})</span>
+            </div>
+
+            <button
+              onClick={handleKeepAllDuplicates}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                backgroundColor: '#FFFFFF',
+                border: '1.2px solid #FCA5A5',
+                color: '#DC2626',
+                fontSize: '0.75rem',
+                fontWeight: 800,
+                cursor: 'pointer'
+              }}
+              title="Keep all duplicate transactions and clear alerts"
+            >
+              <Check size={13} />
+              <span>Keep All</span>
+            </button>
           </div>
 
           {unresolvedDuplicates.map(dup => {
