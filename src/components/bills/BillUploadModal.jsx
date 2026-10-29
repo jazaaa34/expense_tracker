@@ -99,7 +99,34 @@ export default function BillUploadModal({ isOpen, onClose, onSaveExpense, onFall
     onClose();
   };
 
-  // Validate and read file into base64
+  // Helper to downscale and compress images client-side to keep payload light (<300KB)
+  const compressImage = (dataUrl, maxDim = 1280, quality = 0.82) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  };
+
+  // Validate and read file into base64 with client-side compression
   const processFile = (file) => {
     setErrorMsg('');
     if (!file) return;
@@ -109,18 +136,19 @@ export default function BillUploadModal({ isOpen, onClose, onSaveExpense, onFall
       return;
     }
 
-    if (file.size > MAX_SIZE_BYTES) {
-      setErrorMsg(`File is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed size is ${MAX_SIZE_MB} MB.`);
-      return;
-    }
-
     setSelectedFile(file);
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const result = e.target.result;
-      setImagePreview(result);
-      setImageBase64(result);
+      try {
+        const compressed = await compressImage(result);
+        setImagePreview(compressed);
+        setImageBase64(compressed);
+      } catch {
+        setImagePreview(result);
+        setImageBase64(result);
+      }
     };
     reader.onerror = () => {
       setErrorMsg('Failed to read image file. Please try again.');

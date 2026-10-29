@@ -149,98 +149,45 @@ export function WalletProvider({ children }) {
         if (!ok || !data?.data) return;
         const cloudData = data.data;
         const cloudTxns = Array.isArray(cloudData.transactions) ? cloudData.transactions : [];
-        const localLastUpdate = Number(storageService.getUserData(email, 'last_local_update', 0)) || 0;
-        const cloudUpdatedAt = Number(data.updatedAt) || Number(cloudData.lastModified) || 0;
+        const hasCloudRecord = Boolean(cloudData.lastModified || cloudTxns.length > 0 || Object.keys(cloudData.budgets || {}).length > 0);
 
-        // Current local state snapshot
-        const currentLocal = stateRef.current.transactions;
-        const activeDeleted = new Set((storageService.getUserData(email, 'deleted_txn_ids', []) || []).map(String));
+        if (hasCloudRecord) {
+          // Cloud database has real saved records for this user! Load authoritative cloud state
+          cloudTxns.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-        // Smart merge: local edits take priority unless cloud is strictly newer
-        const txnMap = new Map();
+          const activeBudgets = cloudData.budgets || {};
+          const activeGoals = Array.isArray(cloudData.goals) ? cloudData.goals : [];
+          const activeAlerts = Array.isArray(cloudData.alerts) ? cloudData.alerts : [];
+          const activeSaved = typeof cloudData.savedAmount === 'number' ? cloudData.savedAmount : 0;
+          const activeCaps = cloudData.utilityCaps || {};
 
-        // 1. Seed with local transactions
-        for (const t of currentLocal) {
-          if (t && t.id && !activeDeleted.has(String(t.id))) {
-            txnMap.set(String(t.id), t);
-          }
-        }
+          stateRef.current = {
+            transactions: cloudTxns,
+            budgets: activeBudgets,
+            goals: activeGoals,
+            alerts: activeAlerts,
+            savedAmount: activeSaved,
+            utilityCaps: activeCaps,
+            aiQuestions: stateRef.current.aiQuestions
+          };
 
-        // 2. Merge cloud transactions
-        for (const t of cloudTxns) {
-          if (!t || !t.id || activeDeleted.has(String(t.id))) continue;
-          const idStr = String(t.id);
-          const existing = txnMap.get(idStr);
-          if (!existing) {
-            txnMap.set(idStr, t);
-          } else {
-            const cloudTime = new Date(t.updatedAt || t.date || 0).getTime();
-            const localTime = new Date(existing.updatedAt || existing.date || 0).getTime();
-            // Cloud wins only if newer than local record
-            if (cloudTime > localTime) {
-              txnMap.set(idStr, t);
-            }
-          }
-        }
+          setTransactions(cloudTxns);
+          setBudgets(activeBudgets);
+          setGoals(activeGoals);
+          setAlerts(activeAlerts);
+          setSavedAmount(activeSaved);
+          setUtilityCaps(activeCaps);
 
-        const mergedTxns = Array.from(txnMap.values());
-        mergedTxns.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-        const isCloudNewer = cloudUpdatedAt > localLastUpdate;
-
-        // Merge budgets
-        const mergedBudgets = (isCloudNewer && cloudData.budgets && Object.keys(cloudData.budgets).length > 0)
-          ? cloudData.budgets
-          : (Object.keys(stateRef.current.budgets).length > 0 ? stateRef.current.budgets : cloudData.budgets || {});
-
-        // Merge goals
-        const mergedGoals = (isCloudNewer && Array.isArray(cloudData.goals) && cloudData.goals.length > 0)
-          ? cloudData.goals
-          : (stateRef.current.goals.length > 0 ? stateRef.current.goals : cloudData.goals || []);
-
-        // Merge alerts
-        const mergedAlerts = (isCloudNewer && Array.isArray(cloudData.alerts) && cloudData.alerts.length > 0)
-          ? cloudData.alerts
-          : (stateRef.current.alerts.length > 0 ? stateRef.current.alerts : cloudData.alerts || []);
-
-        // Merge saved amount
-        const mergedSaved = (isCloudNewer && typeof cloudData.savedAmount === 'number')
-          ? cloudData.savedAmount
-          : stateRef.current.savedAmount;
-
-        // Merge utility caps
-        const mergedCaps = (isCloudNewer && cloudData.utilityCaps && Object.keys(cloudData.utilityCaps).length > 0)
-          ? cloudData.utilityCaps
-          : (Object.keys(stateRef.current.utilityCaps).length > 0 ? stateRef.current.utilityCaps : cloudData.utilityCaps || {});
-
-        stateRef.current = {
-          transactions: mergedTxns,
-          budgets: mergedBudgets,
-          goals: mergedGoals,
-          alerts: mergedAlerts,
-          savedAmount: mergedSaved,
-          utilityCaps: mergedCaps,
-          aiQuestions: stateRef.current.aiQuestions
-        };
-
-        setTransactions(mergedTxns);
-        setBudgets(mergedBudgets);
-        setGoals(mergedGoals);
-        setAlerts(mergedAlerts);
-        setSavedAmount(mergedSaved);
-        setUtilityCaps(mergedCaps);
-
-        // Update local storage cache
-        storageService.setUserData(email, 'transactions', mergedTxns);
-        storageService.setUserData(email, 'budgets', mergedBudgets);
-        storageService.setUserData(email, 'goals', mergedGoals);
-        storageService.setUserData(email, 'alerts', mergedAlerts);
-        storageService.setUserData(email, 'saved_amount', mergedSaved);
-        storageService.setUserData(email, 'utility_caps', mergedCaps);
-        storageService.setUserData(email, 'last_local_update', Math.max(localLastUpdate, cloudUpdatedAt));
-
-        // If local had newer items not yet in cloud, push the unified merged data to Atlas
-        if (localLastUpdate > cloudUpdatedAt || mergedTxns.length > cloudTxns.length) {
+          // Update local cache to match MongoDB
+          storageService.setUserData(email, 'transactions', cloudTxns);
+          storageService.setUserData(email, 'budgets', activeBudgets);
+          storageService.setUserData(email, 'goals', activeGoals);
+          storageService.setUserData(email, 'alerts', activeAlerts);
+          storageService.setUserData(email, 'saved_amount', activeSaved);
+          storageService.setUserData(email, 'utility_caps', activeCaps);
+          storageService.setUserData(email, 'last_local_update', cloudData.lastModified || Date.now());
+        } else {
+          // Brand new user with no cloud records yet: initialize database with initial state
           pushCurrentStateToDb();
         }
       }).catch((err) => {

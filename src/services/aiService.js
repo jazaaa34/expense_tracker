@@ -306,26 +306,86 @@ ${recent.map(t => `• **${t.title}** (${t.category}): **${t.type === 'income' ?
 You can view your complete transaction log and export CSV statements under the **Transactions** tab anytime!`;
     }
 
-    // 7. Savings advice & ₹5,000 cut
-    if (p.includes('save') || p.includes('cut') || p.includes('reduce') || p.includes('invest') || p.includes('5000')) {
-      return `Saving more money is all about targeting your single biggest outflow first! 💡
+    // 7. Savings advice & trimming
+    if (p.includes('save') || p.includes('cut') || p.includes('reduce') || p.includes('trim') || p.includes('leak') || p.includes('5000')) {
+      const fifteenPct = Math.round(topAmount * 0.15);
+      return `### How to Boost Your Savings Right Now 💡
 
-Looking at your numbers:
-1. **Trim ${topCategory}:** You've spent ₹${topAmount.toLocaleString()} here. Cutting just 10%–15% here frees up **₹${Math.round(topAmount * 0.15).toLocaleString()}** right away.
-2. **Money Guard Alerts:** Check the **Alerts** tab to monitor your peak spending day and guard against duplicate charges.
-3. **Automate It:** Move ₹3,000 to ₹5,000 directly into your Emergency Fund or high-interest savings on salary day so you don't even see it in your checking balance.
+Looking closely at your current cash flows:
+1. **Target ${topCategory}:** You've spent ₹${topAmount.toLocaleString()} here so far. Trimming just 10%–15% in this category frees up **₹${fifteenPct.toLocaleString()}** immediately.
+2. **Review Recurring Bills:** Check the **Money Guard Alerts** tab to spot any price hikes on utilities or duplicate charges.
+3. **Automate ₹5,000 to Emergency Fund:** Move ₹3,000 to ₹5,000 into a liquid or high-yield savings account the moment your salary arrives so it doesn't get spent.
+4. **Current Buffer:** You already have **₹${netSavings.toLocaleString()}** in net disposable balance (${savingsRate} savings rate).
 
-Would you like to focus on building an emergency cushion or saving for a specific purchase?`;
+Which category would you like help setting a stricter budget limit for?`;
     }
 
-    // 8. General conversational fallback (Directly conversational like ChatGPT, no robotic templates)
-    return `That's a great question, ${userName}! 
+    // 8. Goals & Emergency Fund
+    if (p.includes('goal') || p.includes('emergency') || p.includes('fund') || p.includes('future')) {
+      const targetFund = totalExpense * 3;
+      return `### Emergency Fund & Goals Strategy 🎯
 
-Taking a look at your current finances:
-You're currently in a positive position with **₹${netSavings.toLocaleString()}** in net savings and an overall **${savingsRate}** savings rate on your ₹${totalIncome.toLocaleString()} income.
+- **Monthly Burn Rate:** ₹${totalExpense.toLocaleString()}
+- **Recommended 3-Month Emergency Cushion:** ₹${targetFund.toLocaleString()}
+- **Current Net Savings:** ₹${netSavings.toLocaleString()}
 
-Whether you're looking to plan ahead, cut costs on **${topCategory}**, or figure out your next financial move, I'm here to chat through it with you.
+${netSavings >= targetFund 
+  ? `🌟 **Awesome job!** Your current net balance of ₹${netSavings.toLocaleString()} covers your 3-month survival cushion. You can now confidently allocate surplus cash toward your long-term goals or investments!`
+  : `🌱 **Recommended Step:** Aim to build up to **₹${targetFund.toLocaleString()}** (3 months of essential expenses) in an emergency liquid account before making high-risk investments.`}
 
-Tell me a bit more about what you have in mind or what you'd like to do! 😊`;
+You currently have **${goals.length} active goal${goals.length === 1 ? '' : 's'}** set up in your Goals tab. Would you like to set a new milestone?`;
+    }
+
+    // 9. Bills & Subscriptions & Utilities
+    if (p.includes('bill') || p.includes('subscription') || p.includes('utility') || p.includes('electricity') || p.includes('wifi') || p.includes('broadband')) {
+      return `### Managing Bills & Utilities ⚡
+
+- **Utility Caps:** Head over to the **Alerts** tab to set monthly caps on Electricity, Broadband, Water, and Mobile recharge.
+- **Auto-Detection:** When you upload bill photos in the **Bill Photo OCR** tab, WalletWeather automatically checks if the price increased compared to last month.
+- **Tip:** Audit your streaming and app subscriptions twice a year—cancelling even 1 unused OTT service saves ₹3,000+ annually!`;
+    }
+
+    // 10. Investment & Wealth Creation
+    if (p.includes('invest') || p.includes('mutual fund') || p.includes('sip') || p.includes('stock') || p.includes('gold') || p.includes('fd') || p.includes('fixed deposit')) {
+      const monthlySIP = Math.max(2000, Math.round(netSavings * 0.3));
+      return `### Smart Investing Framework for ${userName} 📈
+
+With your current net savings rate of **${savingsRate}** (disposable ₹${netSavings.toLocaleString()}):
+1. **Low-Risk Core (60%):** Index Funds (Nifty 50) via automated monthly SIP of ~**₹${monthlySIP.toLocaleString()}**.
+2. **Safe Foundation (20%):** High-yield Fixed Deposits or Liquid Funds for instant liquidity.
+3. **Growth Satellite (20%):** Flexi-cap or thematic equity funds.
+
+*(Always ensure your Emergency Fund of 3–6 months is in place before committing to long lock-in investments!)*`;
+    }
+
+    // 11. Impulse purchases & Paused Buys
+    if (p.includes('impulse') || p.includes('pause') || p.includes('wait') || p.includes('tempted') || p.includes('shopping')) {
+      return `### Impulse Control Guard 🛡️
+
+You've already saved **₹${savedByPausing.toLocaleString()}** by using the 48-Hour Impulse Pause rule!
+
+Before buying non-essential items:
+- Ask: *Will I still care about this 30 days from now?*
+- Apply the **1% Rule**: For any purchase over ₹${Math.max(500, Math.round(totalIncome * 0.01)).toLocaleString()} (1% of income), wait 48 hours before purchasing.
+
+Check the **Dashboard** impulse tracker whenever you pause a purchase to watch your savings grow!`;
+    }
+
+    // 12. Dynamic contextual assistant response tailored to user's exact words
+    return `### Financial Review for ${userName} 📊
+
+Here is a quick snapshot based on your question:
+- **Net Disposable Balance:** ₹${netSavings.toLocaleString()}
+- **Total Income Recorded:** ₹${totalIncome.toLocaleString()}
+- **Expenses Logged:** ₹${totalExpense.toLocaleString()} (${savingsRate} saved)
+- **Top Outflow:** ${topCategory} (₹${topAmount.toLocaleString()})
+
+${p.length > 5 ? `Regarding **"${prompt.trim()}"**: Based on your available cushion of ₹${netSavings.toLocaleString()}, your finances are currently in a ${netSavings > 0 ? 'healthy surplus' : 'tight margin'}.` : ''}
+
+You can ask me to:
+- Test if you can afford a specific item: *"Can I buy a ₹12,000 gadget?"*
+- Find where to trim spending: *"Where can I cut ₹5,000?"*
+- Check any category: *"How much did I spend on ${topCategory}?"*
+- Plan an emergency fund or review recent transactions!`;
   }
 };
