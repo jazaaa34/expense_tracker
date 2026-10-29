@@ -99,8 +99,8 @@ export default function BillUploadModal({ isOpen, onClose, onSaveExpense, onFall
     onClose();
   };
 
-  // Helper to downscale and compress images client-side to keep payload light (<300KB)
-  const compressImage = (dataUrl, maxDim = 1280, quality = 0.82) => {
+  // Helper to downscale and compress images client-side with crisp text and white background
+  const compressImage = (dataUrl, maxDim = 1600, quality = 0.88) => {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
@@ -118,6 +118,9 @@ export default function BillUploadModal({ isOpen, onClose, onSaveExpense, onFall
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
+        // Fill canvas with white background so transparent PNGs/screenshots don't turn black
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
@@ -194,18 +197,20 @@ export default function BillUploadModal({ isOpen, onClose, onSaveExpense, onFall
       const extracted = result.data || {};
       const extShop = extracted.shopName || '';
       const extDate = extracted.date || new Date().toISOString().split('T')[0];
-      const extAmount = extracted.totalAmount !== null && extracted.totalAmount !== undefined ? String(extracted.totalAmount) : '';
+      const extAmount = (extracted.totalAmount !== null && extracted.totalAmount !== undefined && String(extracted.totalAmount).trim() !== '') ? String(extracted.totalAmount) : '';
       const extConfidence = typeof extracted.confidence === 'number' ? extracted.confidence : 0.8;
+      const extCategory = extracted.category || guessCategory(extShop);
+      const extItems = extracted.items || '';
 
       setShopName(extShop);
       setDate(extDate);
       setAmount(extAmount);
       setConfidence(extConfidence);
-      setCategory(guessCategory(extShop));
-      setNote(extShop ? `Extracted from ${extShop} bill` : 'Extracted from bill photo');
+      setCategory(extCategory);
+      setNote(extItems ? (extShop ? `${extShop}: ${extItems}` : extItems) : (extShop ? `Extracted from ${extShop} bill` : 'Extracted from bill photo'));
 
       // Highlight empty/null fields to prompt user review
-      setHighlightMissing(true);
+      setHighlightMissing(!extShop || !extAmount);
       setStep('review');
 
     } catch (err) {

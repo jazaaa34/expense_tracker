@@ -3,6 +3,7 @@ import { useWallet } from '../context/WalletContext';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../services/apiClient';
 import { formatINR, EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../services/storageService';
+import { compressImage } from '../utils/imageCompressor';
 import {
   UploadCloud,
   FileSpreadsheet,
@@ -83,20 +84,32 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
     const name = f.name.toLowerCase();
     const ext = (name.split('.').pop() || '').toLowerCase();
     const mime = (f.type || '').toLowerCase();
-    const fileType = ext || (mime.includes('pdf') ? 'pdf' : (mime.includes('csv') ? 'csv' : (mime.includes('image') ? 'png' : 'txt')));
+    const isImageFile = mime.startsWith('image/') || ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'].includes(ext);
+    const fileType = ext || (mime.includes('pdf') ? 'pdf' : (mime.includes('csv') ? 'csv' : (isImageFile ? 'png' : 'txt')));
 
     setFile(f);
     setIsParsing(true);
 
     try {
-      // Read file into Base64
-      const reader = new FileReader();
-      const base64Promise = new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-      });
-      reader.readAsDataURL(f);
-      const base64Data = await base64Promise;
+      // Read file into Base64 (with smart compression for screenshots / phone photos)
+      let base64Data = '';
+      if (isImageFile) {
+        try {
+          base64Data = await compressImage(f, 1600, 0.88);
+        } catch (compErr) {
+          console.warn('[Importer] Client-side image compression fallback:', compErr);
+        }
+      }
+
+      if (!base64Data) {
+        const reader = new FileReader();
+        const base64Promise = new Promise((resolve, reject) => {
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+        });
+        reader.readAsDataURL(f);
+        base64Data = await base64Promise;
+      }
 
       const response = await apiRequest('/api/statements/parse', {
         method: 'POST',
