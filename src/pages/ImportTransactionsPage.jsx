@@ -18,7 +18,11 @@ import {
   X,
   ShieldAlert,
   HelpCircle,
-  FileText
+  FileText,
+  Lock,
+  Key,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 const MAX_FILE_SIZE_BYTES = 4.5 * 1024 * 1024; // 4.5 MB
@@ -39,6 +43,11 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successResult, setSuccessResult] = useState(null);
+
+  // Password-protected statement support
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [pdfPassword, setPdfPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   // Extracted transactions list
   const [transactions, setTransactions] = useState([]);
@@ -71,23 +80,26 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
     }
   };
 
-  const processSelectedFile = async (f) => {
+  const processSelectedFile = async (f, enteredPassword = '') => {
     setErrorMsg('');
     setSuccessResult(null);
 
+    const targetFile = f || file;
+    if (!targetFile) return;
+
     // Validate size
-    if (f.size > MAX_FILE_SIZE_BYTES) {
-      setErrorMsg(`File is too large (${(f.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed size is 4.5 MB.`);
+    if (targetFile.size > MAX_FILE_SIZE_BYTES) {
+      setErrorMsg(`File is too large (${(targetFile.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed size is 4.5 MB.`);
       return;
     }
 
-    const name = f.name.toLowerCase();
+    const name = targetFile.name.toLowerCase();
     const ext = (name.split('.').pop() || '').toLowerCase();
-    const mime = (f.type || '').toLowerCase();
+    const mime = (targetFile.type || '').toLowerCase();
     const isImageFile = mime.startsWith('image/') || ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'].includes(ext);
     const fileType = ext || (mime.includes('pdf') ? 'pdf' : (mime.includes('csv') ? 'csv' : (isImageFile ? 'png' : 'txt')));
 
-    setFile(f);
+    setFile(targetFile);
     setIsParsing(true);
 
     try {
@@ -95,7 +107,7 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
       let base64Data = '';
       if (isImageFile) {
         try {
-          base64Data = await compressImage(f, 1600, 0.88);
+          base64Data = await compressImage(targetFile, 1600, 0.88);
         } catch (compErr) {
           console.warn('[Importer] Client-side image compression fallback:', compErr);
         }
@@ -107,19 +119,30 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
           reader.onload = () => resolve(reader.result);
           reader.onerror = reject;
         });
-        reader.readAsDataURL(f);
+        reader.readAsDataURL(targetFile);
         base64Data = await base64Promise;
       }
+
+      const activePassword = enteredPassword || pdfPassword || '';
 
       const response = await apiRequest('/api/statements/parse', {
         method: 'POST',
         body: JSON.stringify({
           fileData: base64Data,
-          fileName: f.name,
+          fileName: targetFile.name,
           fileType,
+          pdfPassword: activePassword,
           userEmail: user?.email || ''
         })
       });
+
+      // Handle password required error from bank PDFs
+      if (response.data?.isPasswordRequired) {
+        setIsPasswordModalOpen(true);
+        setErrorMsg(response.data?.error || 'This PDF statement is password-protected. Please enter your password to unlock it.');
+        setIsParsing(false);
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(response.data?.error || `Server returned HTTP ${response.status}`);
@@ -131,8 +154,14 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
       }
 
       setTransactions(txns);
+      setIsPasswordModalOpen(false);
+      setPdfPassword('');
     } catch (err) {
       console.error('Statement parse failure:', err);
+      const isPass = (err.message || '').toLowerCase().includes('password');
+      if (isPass) {
+        setIsPasswordModalOpen(true);
+      }
       setErrorMsg(err.message || 'Failed to read statement. Please check the file format.');
       setTransactions([]);
     } finally {
@@ -436,6 +465,140 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
         </div>
       )}
 
+      {/* Password Prompt Modal for Protected Bank PDFs */}
+      {isPasswordModalOpen && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '16px'
+        }}>
+          <div className="card" style={{
+            maxWidth: '460px',
+            width: '100%',
+            padding: '24px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            border: '1px solid var(--border-light)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '12px',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                color: '#EF4444',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Lock size={22} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  Password-Protected Statement
+                </h3>
+                <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  {file?.name || 'Bank statement'} is encrypted by your bank.
+                </p>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '16px' }}>
+              Most bank statements (SBI, HDFC, ICICI, Axis, etc.) are locked with your <strong>Date of Birth (DDMMYYYY)</strong> or <strong>PAN card number</strong>. Enter the password below to decrypt and import:
+            </p>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (pdfPassword.trim()) {
+                processSelectedFile(file, pdfPassword.trim());
+              }
+            }}>
+              <div style={{ position: 'relative', marginBottom: '16px' }}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter PDF password (e.g. 15081995 or ABCDE1234F)"
+                  value={pdfPassword}
+                  onChange={(e) => setPdfPassword(e.target.value)}
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    padding: '12px 40px 12px 14px',
+                    borderRadius: '8px',
+                    border: '1.5px solid var(--border-light)',
+                    backgroundColor: 'var(--surface-muted)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.9375rem',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(p => !p)}
+                  style={{
+                    position: 'absolute',
+                    right: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPasswordModalOpen(false);
+                    setPdfPassword('');
+                  }}
+                  style={{
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-light)',
+                    backgroundColor: 'transparent',
+                    color: 'var(--text-primary)',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!pdfPassword.trim() || isParsing}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    backgroundColor: 'var(--primary)',
+                    color: '#FFFFFF',
+                    fontWeight: 700,
+                    cursor: pdfPassword.trim() && !isParsing ? 'pointer' : 'not-allowed',
+                    opacity: pdfPassword.trim() && !isParsing ? 1 : 0.6,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Key size={16} />
+                  <span>{isParsing ? 'Decrypting...' : 'Unlock & Extract'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* STEP 1: Upload Dropzone (shown when no statement is currently loaded) */}
       {transactions.length === 0 && (
         <div
@@ -462,7 +625,7 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
             type="file"
             ref={fileInputRef}
             onChange={handleFileInputChange}
-            accept="*/*"
+            accept=".pdf,.csv,.xlsx,.xls,.tsv,.txt,image/*,application/pdf"
             style={{ display: 'none' }}
           />
 
@@ -487,7 +650,35 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
             <h2 style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
               {isParsing ? 'Parsing Statement Rows...' : 'Click or Drag & Drop Any Statement'}
             </h2>
+            <p style={{ margin: '6px 0 0', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+              Supports PDF statements, GPay exports, Excel (XLSX), CSV, and screenshots
+            </p>
           </div>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              fileInputRef.current?.click();
+            }}
+            style={{
+              padding: '10px 22px',
+              borderRadius: '10px',
+              backgroundColor: 'var(--primary)',
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontSize: '0.875rem',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginTop: '4px'
+            }}
+          >
+            <FileText size={18} />
+            <span>Select PDF or Statement File</span>
+          </button>
 
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '6px' }}>
             <span style={{ fontSize: '0.6875rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: 'var(--surface-muted)', color: 'var(--text-secondary)' }}>
@@ -496,7 +687,7 @@ export default function ImportTransactionsPage({ onNavigateTab }) {
             <span style={{ fontSize: '0.6875rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: 'var(--surface-muted)', color: 'var(--text-secondary)' }}>
               📊 Excel (XLSX / XLS)
             </span>
-            <span style={{ fontSize: '0.6875rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: 'var(--surface-muted)', color: 'var(--text-secondary)' }}>
+            <span style={{ fontSize: '0.6875rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: '#EFF6FF', color: '#1D4ED8' }}>
               📑 PDF Statements
             </span>
             <span style={{ fontSize: '0.6875rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: '#ECFDF5', color: '#047857' }}>

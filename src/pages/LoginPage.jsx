@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ArrowLeft, Lock, Mail } from 'lucide-react';
+import ForgotPasswordModal from '../components/auth/ForgotPasswordModal';
 
 export default function LoginPage({ onNavigateIntro, onNavigateSignup }) {
   const { login } = useAuth();
@@ -9,6 +10,7 @@ export default function LoginPage({ onNavigateIntro, onNavigateSignup }) {
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -147,8 +149,15 @@ export default function LoginPage({ onNavigateIntro, onNavigateSignup }) {
               </label>
               <button
                 type="button"
-                onClick={() => alert('Password reset link sent to registered email.')}
-                style={{ color: 'var(--accent-honey)', fontWeight: 700 }}
+                onClick={() => setIsForgotPasswordOpen(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--accent-honey)',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  padding: 0
+                }}
               >
                 Forgot password?
               </button>
@@ -183,6 +192,13 @@ export default function LoginPage({ onNavigateIntro, onNavigateSignup }) {
           </div>
         </div>
       </div>
+
+      {/* Real Interactive Password Reset Modal */}
+      <ForgotPasswordModal
+        isOpen={isForgotPasswordOpen}
+        onClose={() => setIsForgotPasswordOpen(false)}
+        initialEmail={email}
+      />
     </div>
   );
 }

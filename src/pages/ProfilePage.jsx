@@ -5,16 +5,30 @@ import { exportService } from '../services/exportService';
 import { formatINR, EXPENSE_CATEGORIES } from '../services/storageService';
 import { apiRequest } from '../services/apiClient';
 import Modal from '../components/common/Modal';
-import { User, RotateCcw, Download, Database, Edit2, ShieldAlert, CheckCircle2, RefreshCw } from 'lucide-react';
+import ForgotPasswordModal from '../components/auth/ForgotPasswordModal';
+import { User, RotateCcw, Download, Database, Edit2, ShieldAlert, CheckCircle2, RefreshCw, Lock, KeyRound, Eye, EyeOff, ShieldCheck, AlertCircle } from 'lucide-react';
 
 export default function ProfilePage() {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, changePassword } = useAuth();
   const { budgets, setBudget, transactions, resetToDefaultData, resetAllToZero } = useWallet();
   const [resetMode, setResetMode] = useState('zero'); // 'zero' or 'demo'
 
   const [isEditNameOpen, setIsEditNameOpen] = useState(false);
   const [nameInput, setNameInput] = useState(user?.name || (user?.email === 'jazaaa34@gmail.com' ? 'Aysha' : ''));
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+
+  // Password management state
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const [currentPasswordInput, setCurrentPasswordInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmNewPasswordInput, setConfirmNewPasswordInput] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // Database status
   const [dbStatus, setDbStatus] = useState({ connected: false, storageType: 'local' });
@@ -88,6 +102,54 @@ export default function ProfilePage() {
     }
   };
 
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (!currentPasswordInput) {
+      setPasswordError('Please enter your current password.');
+      return;
+    }
+    if (newPasswordInput.length < 6) {
+      setPasswordError('New password must be at least 6 characters long.');
+      return;
+    }
+    if (newPasswordInput !== confirmNewPasswordInput) {
+      setPasswordError('New passwords do not match. Please verify both fields.');
+      return;
+    }
+    if (currentPasswordInput === newPasswordInput) {
+      setPasswordError('New password cannot be the same as your current password.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const res = await changePassword({
+        currentPassword: currentPasswordInput,
+        newPassword: newPasswordInput
+      });
+
+      if (!res.success) {
+        setPasswordError(res.message || 'Failed to change password.');
+      } else {
+        setPasswordSuccess('Password successfully updated in your account!');
+        setCurrentPasswordInput('');
+        setNewPasswordInput('');
+        setConfirmNewPasswordInput('');
+        setTimeout(() => {
+          setIsChangePasswordOpen(false);
+          setPasswordSuccess('');
+        }, 1800);
+      }
+    } catch (err) {
+      setPasswordError(err.message || 'Error updating password.');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '28px', maxWidth: '800px', margin: '0 auto' }}>
       <div>
@@ -148,6 +210,74 @@ export default function ProfilePage() {
           <Edit2 size={14} />
           <span>Edit Name</span>
         </button>
+      </div>
+
+      {/* Account Security & Password Card */}
+      <div className="card" style={{ padding: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{
+            width: '46px',
+            height: '46px',
+            borderRadius: '12px',
+            backgroundColor: 'rgba(30, 41, 59, 0.08)',
+            color: 'var(--primary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Lock size={22} />
+          </div>
+          <div>
+            <div style={{ fontSize: '1.0625rem', fontWeight: 900, color: 'var(--text-primary)' }}>
+              Account Security & Password
+            </div>
+            <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              Keep your credentials updated or reset your password securely via email OTP
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => {
+              setPasswordError('');
+              setPasswordSuccess('');
+              setCurrentPasswordInput('');
+              setNewPasswordInput('');
+              setConfirmNewPasswordInput('');
+              setIsChangePasswordOpen(true);
+            }}
+            className="btn btn-primary"
+            style={{
+              padding: '8px 16px',
+              fontSize: '0.8125rem',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <KeyRound size={14} />
+            <span>Change Password</span>
+          </button>
+
+          <button
+            onClick={() => setIsForgotPasswordOpen(true)}
+            style={{
+              padding: '8px 14px',
+              borderRadius: '10px',
+              backgroundColor: 'var(--surface-muted)',
+              border: '1.2px solid var(--border-light)',
+              color: 'var(--text-secondary)',
+              fontWeight: 700,
+              fontSize: '0.8125rem',
+              cursor: 'pointer'
+            }}
+            title="Reset your password with an email verification code"
+          >
+            <span>Forgot Password?</span>
+          </button>
+        </div>
       </div>
 
       {/* Category Budgets Manager */}
@@ -477,6 +607,231 @@ export default function ProfilePage() {
           </div>
         </div>
       </Modal>
+
+      {/* Change Password Modal */}
+      <Modal
+        isOpen={isChangePasswordOpen}
+        onClose={() => {
+          setIsChangePasswordOpen(false);
+          setPasswordError('');
+          setPasswordSuccess('');
+        }}
+        title="Change Your Password"
+        subtitle="Enter your current password and choose a secure new password"
+        maxWidth="440px"
+      >
+        <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {passwordError && (
+            <div style={{
+              padding: '12px 14px',
+              borderRadius: '10px',
+              backgroundColor: '#FEF2F2',
+              border: '1px solid #FCA5A5',
+              color: '#B91C1C',
+              fontSize: '0.8125rem',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <AlertCircle size={16} style={{ flexShrink: 0 }} />
+              <span>{passwordError}</span>
+            </div>
+          )}
+
+          {passwordSuccess && (
+            <div style={{
+              padding: '12px 14px',
+              borderRadius: '10px',
+              backgroundColor: '#ECFDF5',
+              border: '1px solid #A7F3D0',
+              color: '#047857',
+              fontSize: '0.8125rem',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+              <span>{passwordSuccess}</span>
+            </div>
+          )}
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase' }}>
+              Current Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showCurrentPassword ? 'text' : 'password'}
+                required
+                placeholder="Enter current password"
+                value={currentPasswordInput}
+                onChange={(e) => setCurrentPasswordInput(e.target.value)}
+                style={{
+                  width: '100%',
+                  height: '44px',
+                  paddingLeft: '14px',
+                  paddingRight: '40px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1.2px solid var(--border-light)',
+                  fontSize: '0.9375rem'
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)'
+                }}
+              >
+                {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase' }}>
+              New Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showNewPassword ? 'text' : 'password'}
+                required
+                placeholder="Min. 6 characters"
+                value={newPasswordInput}
+                onChange={(e) => setNewPasswordInput(e.target.value)}
+                style={{
+                  width: '100%',
+                  height: '44px',
+                  paddingLeft: '14px',
+                  paddingRight: '40px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1.2px solid var(--border-light)',
+                  fontSize: '0.9375rem'
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)'
+                }}
+              >
+                {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase' }}>
+              Confirm New Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showConfirmNewPassword ? 'text' : 'password'}
+                required
+                placeholder="Re-enter new password"
+                value={confirmNewPasswordInput}
+                onChange={(e) => setConfirmNewPasswordInput(e.target.value)}
+                style={{
+                  width: '100%',
+                  height: '44px',
+                  paddingLeft: '14px',
+                  paddingRight: '40px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1.2px solid var(--border-light)',
+                  fontSize: '0.9375rem'
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)'
+                }}
+              >
+                {showConfirmNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setIsChangePasswordOpen(false);
+                setIsForgotPasswordOpen(true);
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--accent-honey)',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                padding: 0
+              }}
+            >
+              Forgot current password?
+            </button>
+
+            <button
+              type="submit"
+              disabled={isChangingPassword}
+              className="btn btn-primary"
+              style={{
+                padding: '10px 20px',
+                fontSize: '0.875rem',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              {isChangingPassword ? (
+                <>
+                  <RefreshCw size={14} className="spin" />
+                  <span>Updating...</span>
+                </>
+              ) : (
+                <>
+                  <KeyRound size={14} />
+                  <span>Update Password</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Forgot Password Modal (Accessible directly from Profile too) */}
+      <ForgotPasswordModal
+        isOpen={isForgotPasswordOpen}
+        onClose={() => setIsForgotPasswordOpen(false)}
+        initialEmail={user?.email || ''}
+      />
     </div>
   );
 }

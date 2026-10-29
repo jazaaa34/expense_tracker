@@ -94,6 +94,18 @@ export default async function handler(req, res) {
       return await handleOtpApi(req, res, brevoKey, senderEmail, senderName, 'verify');
     }
 
+    if (pathname === '/api/auth/forgot-password') {
+      return await handleOtpApi(req, res, brevoKey, senderEmail, senderName, 'forgot-password');
+    }
+
+    if (pathname === '/api/auth/reset-password') {
+      return await handleOtpApi(req, res, brevoKey, senderEmail, senderName, 'reset-password');
+    }
+
+    if (pathname === '/api/auth/change-password') {
+      return await handleOtpApi(req, res, brevoKey, senderEmail, senderName, 'change-password');
+    }
+
     if (pathname.startsWith('/api/auth/')) {
       return await handleOtpApi(req, res, brevoKey, senderEmail, senderName);
     }

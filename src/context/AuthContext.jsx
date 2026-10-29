@@ -125,6 +125,89 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const resetPassword = async ({ email, otp, newPassword, verificationToken }) => {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    try {
+      const { ok, data } = await apiRequest('/api/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: cleanEmail,
+          otp,
+          newPassword,
+          verificationToken
+        })
+      });
+
+      if (!ok || !data?.success) {
+        return {
+          success: false,
+          message: data?.error || 'Failed to reset password. Please check the code.'
+        };
+      }
+
+      // Update local storage registered users
+      const users = storageService.get(STORAGE_KEYS.REGISTERED_USERS, {});
+      if (!users[cleanEmail]) {
+        users[cleanEmail] = { name: data.user?.name || 'User', password: newPassword };
+      } else {
+        users[cleanEmail].password = newPassword;
+      }
+      storageService.set(STORAGE_KEYS.REGISTERED_USERS, users);
+
+      return {
+        success: true,
+        message: data.message || 'Password reset successfully!'
+      };
+    } catch (e) {
+      return {
+        success: false,
+        message: e.message || 'Network error while resetting password.'
+      };
+    }
+  };
+
+  const changePassword = async ({ currentPassword, newPassword }) => {
+    if (!user?.email) {
+      return { success: false, message: 'You must be logged in to change your password.' };
+    }
+    const cleanEmail = user.email.trim().toLowerCase();
+
+    try {
+      const { ok, data } = await apiRequest('/api/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: cleanEmail,
+          currentPassword,
+          newPassword
+        })
+      });
+
+      if (!ok || !data?.success) {
+        return {
+          success: false,
+          message: data?.error || 'Failed to change password.'
+        };
+      }
+
+      // Update local storage registered users
+      const users = storageService.get(STORAGE_KEYS.REGISTERED_USERS, {});
+      if (users[cleanEmail]) {
+        users[cleanEmail].password = newPassword;
+        storageService.set(STORAGE_KEYS.REGISTERED_USERS, users);
+      }
+
+      return {
+        success: true,
+        message: data.message || 'Password changed successfully!'
+      };
+    } catch (e) {
+      return {
+        success: false,
+        message: e.message || 'Network error while changing password.'
+      };
+    }
+  };
+
   const requestLogout = () => {
     window.dispatchEvent(new CustomEvent('walletweather_open_exit_dialog'));
   };
@@ -139,7 +222,9 @@ export function AuthProvider({ children }) {
       signUp,
       logout,
       requestLogout,
-      updateProfile
+      updateProfile,
+      resetPassword,
+      changePassword
     }}>
       {children}
     </AuthContext.Provider>
